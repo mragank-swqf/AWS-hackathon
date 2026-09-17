@@ -1,6 +1,6 @@
 ---
 title: RegImpact Testing and AI Evaluation Specification
-version: 1.0
+version: 1.2
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -9,33 +9,44 @@ tags: [process, testing, evaluation, quality]
 
 # Introduction
 
-This specification defines functional, integration, end-to-end, security, performance, retrieval, and AI-output evaluation for RegImpact.
+This spec says what we test and how. It covers the code, the infrastructure, search, the AI
+steps, the source links, and the full user journey.
 
 ## 1. Purpose & Scope
 
-The specification applies to application code, infrastructure, retrieval, agents, citations, and the final user workflow.
+Two different jobs sit here. One is normal software testing: does the code work. The other is
+measuring AI output quality: are the answers any good. Both matter.
 
 ## 2. Definitions
 
-- **Recall@K**: Percentage of relevant items retrieved within the top K results.
-- **Precision@K**: Percentage of top K results that are relevant.
-- **End-to-end test**: Test of a complete user workflow.
-- **Regression test**: Test ensuring previously working behavior remains correct.
+- **Recall@K**: Out of all the right chunks, how many showed up in the top K results.
+- **Precision@K**: Out of the top K results, how many were actually right.
+- **MRR**: On average, how high up the first right answer appeared.
+- **End-to-end test**: A test that walks a whole user journey.
+- **Regression test**: A test that makes sure something we already fixed stays fixed.
+- **Fixture**: A test file or test record we keep around on purpose.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: Every critical API shall have unit and integration tests.
-- **REQ-002**: The main upload-to-report workflow shall have an end-to-end test.
-- **REQ-003**: Retrieval shall be evaluated using labeled queries.
-- **REQ-004**: AI outputs shall be evaluated for applicability, requirements, citations, gaps, and actions.
-- **REQ-005**: Security tests shall cover tenant isolation.
-- **REQ-006**: Performance tests shall measure analysis latency and job failure rate.
-- **CON-001**: Test data shall not contain real confidential customer information.
-- **GUD-001**: Store model inputs, outputs, and evaluation labels for reproducibility where permitted.
+- **REQ-001**: Every important endpoint needs unit tests and tests against a real database.
+- **REQ-002**: The main journey, upload to report, needs one full test.
+- **REQ-003**: Test search with a list of questions where we already know the right chunks.
+- **REQ-004**: Score the AI output on applicability, requirements, sources, gaps, and tasks.
+- **REQ-005**: Test that companies stay apart. Include one test where a search run for company A never returns company B's chunks.
+- **REQ-006**: Measure how long an analysis takes and how often jobs fail.
+- **REQ-007**: Test the risk table and the review rules with a case for every box and every line. Both are plain code, so these tests need no AI call and run in CI.
+- **REQ-008**: For every fixed value list in `spec-schema-input-contracts.md`, add a test proving a value not on the list gets rejected.
+- **REQ-009**: Test that running a job twice is safe. Send the same job twice and check no step runs again.
+- **REQ-010**: Keep a set of documents with hidden instructions in them. Report how often we resist them, next to the search and source numbers.
+- **REQ-011**: Test every possible review move, and check that any move not on the list gets refused.
+- **REQ-012**: For every output shape in `spec-schema-agent-contracts.md`, add test cases with missing sources, fields the step is not allowed to send, and values not on the list.
+- **CON-001**: Never use real customer data in tests.
+- **CON-002**: Do not test plain code through the AI. Call the risk table, the review rules, and the merge step directly.
+- **GUD-001**: Where we are allowed, save what went into the AI, what came out, and the right answer. Then we can compare runs later.
 
 ## 4. Interfaces & Data Contracts
 
-Evaluation record:
+One test case record:
 
 ```json
 {
@@ -56,52 +67,56 @@ Evaluation record:
 
 - **AC-001**: Unit tests pass in CI.
 - **AC-002**: API contract tests pass.
-- **AC-003**: End-to-end upload-to-report test passes.
-- **AC-004**: Retrieval benchmark results are recorded.
-- **AC-005**: Unsupported claim rate is measured.
-- **AC-006**: Security and authorization tests pass.
-- **AC-007**: Performance results are documented.
+- **AC-003**: The full upload-to-report test passes.
+- **AC-004**: We have written down the search quality numbers.
+- **AC-005**: We know how often the AI makes a point it cannot back up.
+- **AC-006**: The security and permission tests pass.
+- **AC-007**: The speed numbers are written down.
 
 ## 6. Test Automation Strategy
 
-- **Test Levels**: Unit, integration, end-to-end, security, performance, AI evaluation.
-- **Frameworks**: Pytest, Playwright, API contract testing, and standard AWS testing tools.
-- **Test Data Management**: Synthetic companies, curated public regulations, and labeled expected outputs.
-- **CI/CD Integration**: Run tests on pull requests and before deployment.
-- **Coverage Requirements**: Minimum 70% backend coverage for MVP-critical code.
-- **Performance Testing**: Measure upload latency, extraction time, retrieval latency, and full analysis duration.
+- **Test Levels**: Unit, against a database, full journey, security, speed, and AI quality.
+- **Frameworks**: Pytest with `pytest-asyncio` and `pytest-cov` for the backend. Playwright in the frontend for browser tests. Contract tests against the API spec.
+- **Test Data Management**: Made-up companies, a few real public rule documents, and written-down right answers.
+- **CI/CD Integration**: Run the tests on every pull request and before every deploy.
+- **Coverage Requirements**: At least 70% of the important backend code.
+- **Performance Testing**: Time the upload, the text extraction, the search, and the whole analysis.
 
 ## 7. Rationale & Context
 
-The platform produces high-impact compliance information. Testing must measure not only software correctness but also evidence quality and uncertainty handling.
+People will make real compliance decisions from this output. So passing tests is not enough. We
+also have to measure whether the sources are right and whether the system admits when it does not
+know.
 
 ## 8. Dependencies & External Integrations
 
 ### External Systems
-- **EXT-001**: CI/CD pipeline.
+- **EXT-001**: The build pipeline.
 
 ### Third-Party Services
-- **SVC-001**: Model inference and retrieval services.
+- **SVC-001**: The AI model and our search.
 
 ### Infrastructure Dependencies
-- **INF-001**: Test environment and logging.
+- **INF-001**: A test environment, and logs.
 
 ### Data Dependencies
-- **DAT-001**: Labeled evaluation corpus.
+- **DAT-001**: The set of test cases with known right answers.
 
 ### Technology Platform Dependencies
-- **PLT-001**: Automated test runner.
+- **PLT-001**: A test runner.
 
 ### Compliance Dependencies
-- **COM-001**: Synthetic or authorized test data only.
+- **COM-001**: Made-up data only, or data we are allowed to use.
 
 ## 9. Examples & Edge Cases
 
-A correct answer with an incorrect citation shall fail citation correctness even if the final recommendation appears reasonable.
+Say the AI gives the right advice but links it to the wrong clause. That fails. The advice looking
+sensible does not save it. A wrong source is the exact thing this product must not do.
 
 ## 10. Validation Criteria
 
-The release shall not be considered ready until critical tests pass and AI evaluation results are reviewed.
+Do not call it ready until the important tests pass and someone has actually looked at the AI
+quality numbers.
 
 ## 11. Related Specifications / Further Reading
 

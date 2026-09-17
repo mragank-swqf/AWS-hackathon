@@ -1,6 +1,6 @@
 ---
 title: RegImpact Frontend and User Experience Specification
-version: 1.0
+version: 1.2
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -9,47 +9,56 @@ tags: [design, frontend, ux, app]
 
 # Introduction
 
-This specification defines the frontend screens, user flows, interaction rules, and result presentation for RegImpact.
+This spec lists the screens, how a user moves between them, and how we show the results.
 
 ## 1. Purpose & Scope
 
-The frontend shall allow users to manage a company profile, upload regulations, run analyses, review evidence, and track remediation actions.
+The web app lets a user fill in their company details, upload documents, run an analysis, read
+the sources, and track the tasks that come out of it.
 
 ## 2. Definitions
 
-- **Dashboard**: Overview of current compliance activity.
-- **Action tracker**: List of remediation tasks.
-- **Review state**: Status indicating whether a report is pending, approved, or rejected.
-- **CTA**: Call to Action.
+- **Dashboard**: The home screen. Shows what is going on right now.
+- **Action tracker**: The list of tasks to fix things.
+- **Review state**: Whether a report is waiting, approved, or rejected.
+- **Result card**: One finding on screen, with its status and what to do.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: The frontend shall provide login or demo access.
-- **REQ-002**: The dashboard shall show recent analyses, high-risk findings, open gaps, and upcoming deadlines.
-- **REQ-003**: The regulation library shall support upload, search, and filtering.
-- **REQ-004**: The analysis page shall show applicability, requirements, impacts, gaps, risks, actions, and citations.
-- **REQ-005**: Reviewers shall be able to approve, reject, or request more evidence.
-- **REQ-006**: The interface shall show loading, success, empty, and error states.
-- **SEC-001**: The frontend shall not expose private API credentials.
-- **CON-001**: The MVP shall prioritize one complete workflow over numerous incomplete screens.
-- **GUD-001**: Use clear uncertainty labels and avoid presenting AI output as final legal advice.
+- **REQ-001**: There must be a login, or a demo way in.
+- **REQ-002**: The dashboard shows recent analyses, risky findings, open gaps, and dates. Split the dates by `date_basis`. Only `cited_effective` and `cited_compliance` dates may be shown as real deadlines. Dates we came up with go in their own group, clearly marked as suggestions. Never show a date we made up as something the regulator asked for.
+- **REQ-003**: The rule library lets a user upload, search, and filter.
+- **REQ-004**: The analysis screen shows applicability, requirements, who is affected, gaps, risk, tasks, and sources.
+- **REQ-005**: A reviewer can approve, reject, or ask for more proof.
+- **REQ-006**: Every screen needs a loading state, a working state, an empty state, and an error state.
+- **REQ-007**: The evidence library lets a user upload company documents, and shows how far each one got.
+- **REQ-008**: A user can click any finding and see the source: the actual lines, the page range, the clause number, and whether the text came from OCR.
+- **REQ-009**: If an analysis is running against a rule document that is no longer `active`, show a clear warning on the screen and name the document that replaced it.
+- **SEC-001**: Never put API keys in the web app.
+- **CON-001**: One whole working flow beats ten half-built screens.
+- **GUD-001**: Say plainly when we are not sure. Never make AI output look like final legal advice.
 
 ## 4. Interfaces & Data Contracts
 
-Required screens:
+Screens we need:
 
 ```text
 Login
 Dashboard
 Company Profile
 Regulation Library
+Evidence Library
 Analysis Setup
 Analysis Results
 Action Tracker
 Review Screen
 ```
 
-Result card fields:
+The Evidence Library is where a user uploads their own policies, and where they see how far each
+upload got. We cannot skip it. Without uploaded documents, gap checking has nothing to compare
+against, so every finding would come back as `insufficient_evidence`.
+
+What goes on a result card:
 
 ```text
 Requirement
@@ -64,48 +73,52 @@ Reviewer Status
 
 ## 5. Acceptance Criteria
 
-- **AC-001**: A user can create a company profile from the UI.
-- **AC-002**: A user can upload a regulation and see processing status.
-- **AC-003**: A user can start and monitor an analysis.
-- **AC-004**: A user can open source citations.
-- **AC-005**: A reviewer can approve or reject an analysis.
-- **AC-006**: The UI remains usable on desktop and mobile widths.
+- **AC-001**: A user can fill in a company profile from the screen.
+- **AC-002**: A user can upload a rule document and watch it being processed.
+- **AC-003**: A user can start an analysis and see how it is going.
+- **AC-004**: A user can click through to a source.
+- **AC-005**: A reviewer can approve or reject a report.
+- **AC-006**: The screens still work on a phone-sized window.
 
 ## 6. Test Automation Strategy
 
-Use component tests, API-mocked integration tests, and Playwright end-to-end tests for login, upload, analysis, review, and action tracking.
+Test the components on their own. Test screens against a fake API. Then use Playwright to walk
+the whole thing: log in, upload, analyse, review, and check the task list.
 
 ## 7. Rationale & Context
 
-Compliance users need to understand why a finding exists and what to do next. The UI should prioritize evidence, status, and actions rather than decorative AI output.
+A compliance person needs two things from a screen: why does this finding exist, and what do I do
+next. So put the sources, the status, and the tasks first. Skip anything that just looks clever.
 
 ## 8. Dependencies & External Integrations
 
 ### External Systems
-- **EXT-001**: Backend REST API.
+- **EXT-001**: The backend API.
 
 ### Third-Party Services
-- **SVC-001**: Authentication provider.
+- **SVC-001**: None. The web app logs in against our own backend.
 
 ### Infrastructure Dependencies
-- **INF-001**: Frontend hosting and CDN.
+- **INF-001**: Somewhere to host the files, plus a CDN.
 
 ### Data Dependencies
-- **DAT-001**: Company, regulation, analysis, gap, action, and citation objects.
+- **DAT-001**: Companies, rule documents, analyses, gaps, tasks, and sources.
 
 ### Technology Platform Dependencies
-- **PLT-001**: Modern browser with HTTPS support.
+- **PLT-001**: A current browser over HTTPS.
 
 ### Compliance Dependencies
-- **COM-001**: Role-aware visibility of sensitive company data.
+- **COM-001**: Show sensitive company data only to roles allowed to see it.
 
 ## 9. Examples & Edge Cases
 
-When a report is incomplete, the screen shall show `Analysis incomplete` and identify the failed stage rather than displaying an apparently complete report.
+If a report only half finished, say `Analysis incomplete` and name the step that broke. Do not
+show what looks like a finished report with pieces quietly missing. That is worse than an error.
 
 ## 10. Validation Criteria
 
-The frontend shall pass the complete user journey and display all required report sections with correct loading and error behavior.
+The web app is done when a user can walk the whole journey, every report section shows up, and
+loading and error states behave.
 
 ## 11. Related Specifications / Further Reading
 

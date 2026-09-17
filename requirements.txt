@@ -11,29 +11,21 @@ python-multipart
 sqlalchemy
 psycopg2-binary
 alembic
+pgvector
 
 # AWS
 boto3
 
-# RAG and document processing
-langchain
-langchain-community
-langchain-text-splitters
-langgraph
+# Document processing
 pypdf
-python-docx
-beautifulsoup4
-
-# Embeddings and vector search
-sentence-transformers
-chromadb
-numpy
+langchain-text-splitters
 
 # HTTP and utilities
 httpx
 requests
 python-dotenv
 orjson
+numpy
 
 # Security and authentication
 PyJWT
@@ -42,6 +34,7 @@ passlib[bcrypt]
 # Testing
 pytest
 pytest-asyncio
+pytest-cov
 
 # Observability and validation
 structlog

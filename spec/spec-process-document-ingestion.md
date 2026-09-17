@@ -1,6 +1,6 @@
 ---
 title: RegImpact Regulatory Document Ingestion Specification
-version: 1.0
+version: 1.2
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -9,30 +9,57 @@ tags: [process, ingestion, documents, ocr, rag]
 
 # Introduction
 
-This specification defines how RegImpact receives, validates, parses, enriches, chunks, and indexes regulatory documents.
+This spec says what happens to a document after someone uploads it: how we check it, read the
+text out of it, cut it into pieces, and make it searchable.
 
 ## 1. Purpose & Scope
 
-The process covers PDF uploads, public source URLs, text extraction, OCR fallback, metadata extraction, section detection, chunking, and storage.
+It covers PDF upload, pulling out the text, using OCR when that fails, reading the document
+details, spotting sections, cutting into chunks, and saving it all.
+
+The MVP takes PDF files only. We do not download anything from regulator websites. The user pastes
+in the source web address when they upload, so we can still show where the document came from.
 
 ## 2. Definitions
 
-- **OCR**: Optical Character Recognition.
-- **Chunk**: A searchable segment of a document.
-- **Metadata**: Descriptive information about a document.
-- **Annexure**: An attachment or supplementary section of a regulation.
+- **OCR**: Reading text out of a picture of a page.
+- **Chunk**: A small piece of a document that we can search.
+- **Metadata**: Details about a document, like its title and date.
+- **Annexure**: An extra section at the end of a rule document.
+- **Token**: Roughly a word. How we measure chunk size.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: The system shall validate file type and size before processing.
-- **REQ-002**: The system shall preserve document ID, page number, section title, and clause number where available.
-- **REQ-003**: The system shall use OCR when normal text extraction is insufficient.
-- **REQ-004**: The system shall detect duplicate documents using hashes and metadata.
-- **REQ-005**: The system shall store the original file separately from extracted text.
-- **REQ-006**: The system shall retain extraction errors and processing status.
-- **SEC-001**: Uploaded files shall be scanned and access-controlled.
-- **CON-001**: The system shall not silently discard unreadable pages.
-- **GUD-001**: Chunk boundaries should follow headings, clauses, tables, and paragraph groups.
+- **REQ-001**: Check the file type and size before doing anything. Accept PDF only.
+- **REQ-002**: Keep the document ID, page number, section title, and clause number where we can find them.
+- **REQ-003**: Use `pypdf` to read the text first. If a page gives back less text than a set limit, send that one page to Amazon Textract for OCR.
+- **REQ-004**: Spot duplicate uploads using a hash of the file and its details.
+- **REQ-005**: Keep the original file. Store the text we pulled out somewhere else.
+- **REQ-006**: Save any errors, and save how far the job got.
+- **REQ-007**: Record how we read each page, not just each document. That way a source link can say if the text came from OCR.
+- **REQ-008**: Company documents go through this same process. A company upload creates `document_chunks` rows with `company_policy_id` and `company_id` filled in, so gap checking can search and cite them.
+- **SEC-001**: Scan uploaded files, and lock them down so only the right people can read them.
+- **CON-001**: Never quietly skip a page we could not read.
+- **CON-002**: Run OCR one page at a time, not on the whole file. Textract costs money and takes time.
+- **GUD-001**: Try to cut chunks at headings, clauses, tables, and paragraph breaks.
+
+### How to cut chunks
+
+Cut at clause boundaries first. Only fall back to size limits if a clause is too big. A clause is
+the thing a compliance person quotes, so cutting there is what makes a source link useful.
+
+- Look for numbered clauses (`3`, `3.2`, `3.2.1`), lettered or roman sub-parts (`(a)`, `(iv)`),
+  heading words (`Para`, `Paragraph`, `Clause`, `Section`, `Annexure`, `Schedule`), and lines in
+  all capitals.
+- Aim for 800 tokens per chunk. Never go past 1200.
+- If a section is bigger than 1200, cut it into pieces that overlap by 100 tokens.
+- Do not add overlap when a section already fits. It would just return the same text twice.
+- If a section is under 100 tokens, glue it onto the chunk before it. Do not make tiny chunks.
+- Keep a table in one chunk if it fits. Never cut in the middle of a table row.
+- Give each chunk the nearest heading above it as `section_title`, and the clause it sits in as
+  `clause_number`.
+- A chunk can run across a page break. Store `page_start` and `page_end`. Never drop the page
+  number just to hit a size target.
 
 ## 4. Interfaces & Data Contracts
 
@@ -53,53 +80,56 @@ The process covers PDF uploads, public source URLs, text extraction, OCR fallbac
 
 ## 5. Acceptance Criteria
 
-- **AC-001**: Given a valid text PDF, when uploaded, then text and metadata are extracted.
-- **AC-002**: Given a scanned PDF, when uploaded, then OCR is attempted.
-- **AC-003**: Given a corrupted file, when uploaded, then processing fails with a visible reason.
-- **AC-004**: Given a duplicate file, when uploaded, then the system identifies the existing document.
-- **AC-005**: Given a document with page-level clauses, when chunked, then page and clause metadata are retained.
+- **AC-001**: Upload a normal PDF. We get the text and the document details.
+- **AC-002**: Upload a scanned PDF. We try OCR on it.
+- **AC-003**: Upload a broken file. The job fails and the user can see why.
+- **AC-004**: Upload the same file twice. The system points at the copy it already has.
+- **AC-005**: Upload a document with numbered clauses. The chunks keep their page and clause numbers.
 
 ## 6. Test Automation Strategy
 
-Test normal PDFs, scanned PDFs, mixed PDFs, tables, multi-column layouts, empty pages, corrupted files, duplicate files, and very large files.
+Test normal PDFs, scanned PDFs, ones that are part scanned, tables, two-column pages, blank
+pages, broken files, duplicate files, and very big files.
 
 ## 7. Rationale & Context
 
-Regulatory analysis is only reliable if source text and location metadata are preserved. Page and clause information is essential for evidence-backed citations.
+The whole product rests on being able to say "this came from here". If we lose the page and
+clause along the way, we cannot show our sources, and the report is worth much less.
 
 ## 8. Dependencies & External Integrations
 
 ### External Systems
-- **EXT-001**: Regulatory source websites.
+- **EXT-001**: Regulator websites. A person downloads from them and uploads to us. Our code never fetches from them.
 
 ### Third-Party Services
-- **SVC-001**: Amazon Textract for OCR.
+- **SVC-001**: Amazon Textract, for OCR on single pages.
 
 ### Infrastructure Dependencies
-- **INF-001**: Amazon S3, queue, worker service, and relational database.
+- **INF-001**: Amazon S3, the job queue, the worker, and the database.
 
 ### Data Dependencies
-- **DAT-001**: Regulatory PDFs and metadata.
+- **DAT-001**: Rule PDFs and their details.
 
 ### Technology Platform Dependencies
-- **PLT-001**: PDF parser and OCR-compatible runtime.
+- **PLT-001**: `pypdf` to read text, and something that can call Textract for OCR.
 
 ### Compliance Dependencies
-- **COM-001**: Source integrity and auditability.
+- **COM-001**: The source must stay intact and checkable.
 
 ## 9. Examples & Edge Cases
 
 ```text
-If 90% of a PDF has extractable text but page 7 is image-only:
-1. Preserve normal extraction.
-2. Run OCR for page 7.
-3. Mark the page extraction method as OCR.
-4. Preserve page 7 in citations.
+A PDF where most pages have real text, but page 7 is just an image:
+1. Keep the normal text from the other pages.
+2. Run OCR on page 7 only.
+3. Mark page 7 as read by OCR.
+4. Keep page 7 usable in source links.
 ```
 
 ## 10. Validation Criteria
 
-A document is valid only when the original file is stored, processing status is recorded, and extracted content is traceable to source pages.
+A document is only done when we have kept the original file, recorded how far the job got, and
+can trace every bit of text back to a page.
 
 ## 11. Related Specifications / Further Reading
 

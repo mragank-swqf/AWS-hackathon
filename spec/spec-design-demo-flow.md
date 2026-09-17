@@ -1,6 +1,6 @@
 ---
 title: RegImpact Hackathon Demo and Demonstration Specification
-version: 1.0
+version: 1.2
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -9,31 +9,34 @@ tags: [design, demo, hackathon, presentation]
 
 # Introduction
 
-This specification defines the repeatable demonstration flow for RegImpact.
+This spec is the demo script. It says exactly what we show, in what order, so it comes out the
+same every time.
 
 ## 1. Purpose & Scope
 
-The demo shall show how a fintech can move from a regulatory PDF to an evidence-backed compliance action plan.
+The demo shows one thing: a fintech starts with a long rule PDF and ends up with a list of tasks,
+where every point links back to the source.
 
 ## 2. Definitions
 
-- **Demo company**: Fictional company used to demonstrate the product.
-- **Demo path**: Ordered sequence of interactions shown to judges.
-- **Evidence-backed**: Supported by source citations and excerpts.
+- **Demo company**: A made-up company we use for the demo.
+- **Demo path**: The exact order of clicks we show the judges.
+- **Backed by sources**: Every point links to the lines it came from.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: The demo shall use a prepared fictional payment aggregator profile.
-- **REQ-002**: The demo shall use at least one source-linked regulatory document.
-- **REQ-003**: The demo shall show extraction, applicability, impact, gaps, actions, and citations.
-- **REQ-004**: The demo shall show human-review status.
-- **REQ-005**: The demo shall complete within approximately five minutes.
-- **CON-001**: Do not depend on unstable live web scraping during the demo.
-- **GUD-001**: Preload documents and use live analysis only where reliable.
+- **REQ-001**: Use a made-up payment aggregator, set up in advance.
+- **REQ-002**: Use at least one real rule document with its source link.
+- **REQ-003**: Show reading the document, applicability, impact, gaps, tasks, and sources.
+- **REQ-004**: Show the review status.
+- **REQ-005**: Finish in about five minutes.
+- **REQ-006**: The demo company must already have at least two documents uploaded. Otherwise gap checking has nothing to find, and we cannot show both a requirement that is met and one that is not.
+- **CON-001**: Do not rely on downloading anything live during the demo.
+- **GUD-001**: Load the documents beforehand. Only run live what we know is reliable.
 
 ## 4. Interfaces & Data Contracts
 
-Demo company:
+The demo company:
 
 ```json
 {
@@ -49,10 +52,11 @@ Demo company:
 }
 ```
 
-Demo sequence:
+The order of clicks:
 
 ```text
 Create company
+→ Upload company evidence (grievance policy, KYC policy)
 → Upload regulation
 → Start analysis
 → Show applicability
@@ -66,50 +70,61 @@ Create company
 → View action tracker
 ```
 
+Set up the demo data so the findings differ from each other. At least one requirement must come
+back `compliant` or `partial`, pointing at a policy the company uploaded. At least one must come
+back as a real gap.
+
+This matters more than it sounds. If every single requirement says `insufficient_evidence`, it
+looks like our product cannot spot anything a company already has. The contrast is the story.
+
 ## 5. Acceptance Criteria
 
-- **AC-001**: The demo can be run from a clean browser session.
-- **AC-002**: All screens load without manual backend intervention.
-- **AC-003**: At least one finding includes a visible citation.
-- **AC-004**: At least one gap generates an action item.
-- **AC-005**: The reviewer approval state changes visibly.
-- **AC-006**: Known limitations are stated in the presentation.
+- **AC-001**: The demo runs from a fresh browser with nothing cached.
+- **AC-002**: Every screen loads without anyone touching the backend.
+- **AC-003**: At least one finding shows a source you can click.
+- **AC-004**: At least one gap creates a task.
+- **AC-005**: The approval status visibly changes on screen.
+- **AC-006**: We say out loud what the product cannot do.
 
 ## 6. Test Automation Strategy
 
-Run the complete demo path at least five times before submission. Test with a clean account, slow network simulation, and failed model-job simulation.
+Run the whole demo path at least five times before we submit. Try it on a clean account, on a slow
+network, and with an AI job forced to fail.
 
 ## 7. Rationale & Context
 
-The strongest demonstration is a clear transformation from a long regulatory document into concrete, reviewable work for a compliance team.
+The strongest thing we can show is the before and after: a long document nobody wants to read,
+turned into a short list of jobs a compliance team can actually work through.
 
 ## 8. Dependencies & External Integrations
 
 ### External Systems
-- **EXT-001**: Deployed RegImpact application.
+- **EXT-001**: The deployed app.
 
 ### Third-Party Services
 - **SVC-001**: AWS AI services.
 
 ### Infrastructure Dependencies
-- **INF-001**: Stable demo deployment and seeded data.
+- **INF-001**: A stable demo deployment with the data already loaded.
 
 ### Data Dependencies
-- **DAT-001**: Fictional company and curated regulation.
+- **DAT-001**: The made-up company and the chosen rule document.
 
 ### Technology Platform Dependencies
-- **PLT-001**: Browser and HTTPS.
+- **PLT-001**: A browser over HTTPS.
 
 ### Compliance Dependencies
-- **COM-001**: Clearly state that output supports, but does not replace, human compliance review.
+- **COM-001**: Say clearly that this helps a compliance review. It does not replace one.
 
 ## 9. Examples & Edge Cases
 
-If analysis takes longer than expected, the UI shall show progress and the presenter shall explain the agent stages rather than displaying a blank screen.
+If the analysis takes longer than we expect, the screen should show progress, and the presenter
+should talk through what each step is doing. Never sit in front of a blank screen.
 
 ## 10. Validation Criteria
 
-The demo shall demonstrate the core value proposition, source traceability, human review, and action tracking in a repeatable manner.
+The demo is ready when it shows the point of the product, shows its sources, shows a person
+reviewing, shows the task list, and does all of that the same way every time.
 
 ## 11. Related Specifications / Further Reading
 

@@ -1,6 +1,6 @@
 ---
 title: RegImpact Regulatory Impact Analysis Specification
-version: 1.0
+version: 1.2
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -9,31 +9,36 @@ tags: [process, impact, compliance, risk]
 
 # Introduction
 
-This specification defines how RegImpact determines regulatory applicability, extracts obligations, maps impacts, identifies gaps, and generates remediation actions.
+This spec says how we work out whether a rule applies, what it asks for, who it hits, what the
+company is missing, and what to do about it.
 
 ## 1. Purpose & Scope
 
-The process applies to each regulation-company analysis and produces a structured, evidence-backed impact report.
+This runs once for each pair of one company and one rule document. It produces a report where
+every point has a source.
 
 ## 2. Definitions
 
-- **Applicability**: Whether a regulation or requirement applies to the company.
-- **Requirement**: An obligation extracted from regulatory text.
-- **Impact**: The business or technical change needed to satisfy a requirement.
-- **Remediation**: Action taken to resolve a compliance gap.
+- **Applicability**: Whether a rule, or one line in it, applies to this company.
+- **Requirement**: One thing the rule says the company must do.
+- **Impact**: The work needed to meet that requirement.
+- **Remediation**: Fixing a gap.
+- **Atomic**: One duty per requirement. Not two duties joined by "and".
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: Applicability shall be determined using company profile and regulatory evidence.
-- **REQ-002**: Requirements shall be extracted as atomic obligations.
-- **REQ-003**: Each requirement shall be mapped to affected departments.
-- **REQ-004**: Each requirement shall be compared against available policies, controls, and evidence.
-- **REQ-005**: Gaps shall include status, severity, explanation, and recommended action.
-- **REQ-006**: The report shall distinguish mandatory requirements from recommendations.
-- **REQ-007**: Every material conclusion shall include citations.
-- **SEC-001**: The analysis shall use only documents authorized for the company.
-- **CON-001**: The system shall not represent an inferred recommendation as direct regulatory text.
-- **GUD-001**: Use explicit uncertainty labels.
+- **REQ-001**: Work out applicability from the company profile and the rule text. Both.
+- **REQ-002**: Split requirements so each one is a single duty.
+- **REQ-003**: Say which teams each requirement affects.
+- **REQ-004**: Compare each requirement against chunks from the company's uploaded documents. Only mark it `compliant` or `partial` if you can point at one of those chunks. What the company typed into its profile never counts.
+- **REQ-005**: Each gap needs a status, how bad it is, a plain reason, and what to do.
+- **REQ-006**: Keep "must do" and "should do" apart in the report.
+- **REQ-007**: Every point that matters needs a source link.
+- **REQ-008**: Record applicability per requirement, as well as for the rule as a whole.
+- **REQ-009**: Work out `severity` and `overall_risk` in code, using the table in section 4. The AI supplies the facts. It must not pick the score.
+- **SEC-001**: Only use documents this company is allowed to see.
+- **CON-001**: Never make our own suggestion look like text from the rule.
+- **GUD-001**: When we are not sure, say so plainly. Use the `uncertain` labels.
 
 ## 4. Interfaces & Data Contracts
 
@@ -41,63 +46,91 @@ The process applies to each regulation-company analysis and produces a structure
 {
   "requirement_id": "req_001",
   "requirement_text": "Maintain a documented grievance process.",
+  "obligation_type": "mandatory",
   "applicability": "likely_applicable",
   "impact_level": "high",
   "affected_departments": ["Compliance", "Customer Support"],
   "gap_status": "insufficient_evidence",
-  "severity": "medium",
+  "severity": "high",
   "recommended_action": "Upload the current grievance process and approval record.",
   "citations": ["citation_001"]
 }
 ```
 
+### How we score risk
+
+The AI only gives us facts it can back up: `obligation_type`, `gap_status`, `impact_level`, and
+the date from the source. Then plain code looks up the score in a table. Same facts in, same
+score out, every time. And we can always tell a reviewer why.
+
+Start with this table:
+
+| | `non_compliant` | `insufficient_evidence` | `partial` | `compliant` |
+|---|---|---|---|---|
+| `mandatory` | high | medium | medium | low |
+| `recommended` | medium | low | low | low |
+
+Then bump the score up one level for each of these. Stop at `critical`:
+
+- `impact_level` is `high`.
+- The date has already passed, or is less than 30 days away.
+
+For the whole report, `overall_risk` is the worst single score. But if three or more requirements
+are `high` or worse, make it `critical`.
+
 ## 5. Acceptance Criteria
 
-- **AC-001**: Given a regulation that explicitly names the company type, when analyzed, then applicability includes the supporting clause.
-- **AC-002**: Given a requirement, when extracted, then it is represented as one atomic obligation.
-- **AC-003**: Given no internal evidence, when gap analysis runs, then the status is `insufficient_evidence`.
-- **AC-004**: Given an engineering-related requirement, when impact mapping runs, then Engineering is included as an affected function.
-- **AC-005**: Given unsupported conclusions, when verification runs, then the report is flagged.
+- **AC-001**: The rule names the company's own type. The report says it applies, and points at that line.
+- **AC-002**: A requirement comes out as one duty, not two joined together.
+- **AC-003**: The company has uploaded nothing. The status comes out `insufficient_evidence`.
+- **AC-004**: The requirement is about systems. Engineering shows up as an affected team.
+- **AC-005**: A claim has no source. The checking step flags the report.
 
 ## 6. Test Automation Strategy
 
-Use labeled expected outputs for applicability, requirements, departments, gaps, severity, and citations. Test ambiguous, superseded, exception-based, and deadline-based regulations.
+Write down the right answer for a set of test cases, then check what we produce against it. Cover
+applicability, requirements, teams, gaps, severity, and sources. Include rules that are vague,
+rules that were replaced, rules with exceptions, and rules with dates.
 
 ## 7. Rationale & Context
 
-The core product value is translating regulatory language into concrete business work without hiding uncertainty or losing source traceability.
+The value of this product is turning legal wording into real work. But only if we do two things
+while we do it: keep saying where each point came from, and admit when we are not sure.
 
 ## 8. Dependencies & External Integrations
 
 ### External Systems
-- **EXT-001**: Regulation and company document repositories.
+- **EXT-001**: Where rule documents and company documents are stored.
 
 ### Third-Party Services
-- **SVC-001**: LLM inference.
-- **SVC-002**: Retrieval and reranking.
+- **SVC-001**: The AI model.
+- **SVC-002**: Our search.
 
 ### Infrastructure Dependencies
-- **INF-001**: Analysis worker and persistent result store.
+- **INF-001**: The worker, and somewhere to save results.
 
 ### Data Dependencies
-- **DAT-001**: Regulation clauses, company profile, policies, and controls.
+- **DAT-001**: Rule clauses, the company profile, and company documents.
 
 ### Technology Platform Dependencies
-- **PLT-001**: Structured JSON generation and validation.
+- **PLT-001**: Something that can produce JSON and check it.
 
 ### Compliance Dependencies
-- **COM-001**: Human review and evidence-backed decisions.
+- **COM-001**: A person reviews, and every decision has a source.
 
 ## 9. Examples & Edge Cases
 
-A regulation may apply to the company but not to a particular product. The system must support requirement-level applicability rather than only document-level applicability.
+A rule can apply to the company but not to one of its products. So we cannot just mark the whole
+document as applying or not. We have to do it line by line.
 
 ## 10. Validation Criteria
 
-An analysis is valid when applicability, requirements, impacts, gaps, risks, actions, and citations are present and internally consistent.
+An analysis is done when applicability, requirements, impacts, gaps, risk, tasks, and sources are
+all there and they agree with each other.
 
 ## 11. Related Specifications / Further Reading
 
 - `spec-process-agent-orchestration.md`
+- `spec-schema-agent-contracts.md`
 - `spec-process-evidence-verification.md`
 - `spec-schema-input-contracts.md`
