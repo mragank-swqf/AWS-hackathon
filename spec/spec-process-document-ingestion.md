@@ -14,8 +14,8 @@ text out of it, cut it into pieces, and make it searchable.
 
 ## 1. Purpose & Scope
 
-It covers PDF upload, pulling out the text, using OCR when that fails, reading the document
-details, spotting sections, cutting into chunks, and saving it all.
+It covers PDF upload, pulling out the text, reading the document details, spotting sections,
+cutting into chunks, and saving it all.
 
 The MVP takes PDF files only. We do not download anything from regulator websites. The user pastes
 in the source web address when they upload, so we can still show where the document came from.
@@ -32,16 +32,23 @@ in the source web address when they upload, so we can still show where the docum
 
 - **REQ-001**: Check the file type and size before doing anything. Accept PDF only.
 - **REQ-002**: Keep the document ID, page number, section title, and clause number where we can find them.
-- **REQ-003**: Use `pypdf` to read the text first. If a page gives back less text than a set limit, send that one page to Amazon Textract for OCR.
-- **REQ-004**: Spot duplicate uploads using a hash of the file and its details.
-- **REQ-005**: Keep the original file. Store the text we pulled out somewhere else.
-- **REQ-006**: Save any errors, and save how far the job got.
-- **REQ-007**: Record how we read each page, not just each document. That way a source link can say if the text came from OCR.
+- **REQ-003**: Use `pypdf` to read the text. There is no OCR in the hackathon build, so pick demo PDFs that already have a real text layer.
+- **REQ-004**: If a page gives back almost no text, do not pretend it worked. Record the page as unread and show that on screen.
+- **REQ-005**: Spot duplicate uploads using a hash of the file and its details.
+- **REQ-006**: Keep the original file. Store the text we pulled out somewhere else.
+- **REQ-007**: Save any errors, and save how far the job got.
 - **REQ-008**: Company documents go through this same process. A company upload creates `document_chunks` rows with `company_policy_id` and `company_id` filled in, so gap checking can search and cite them.
-- **SEC-001**: Scan uploaded files, and lock them down so only the right people can read them.
 - **CON-001**: Never quietly skip a page we could not read.
-- **CON-002**: Run OCR one page at a time, not on the whole file. Textract costs money and takes time.
 - **GUD-001**: Try to cut chunks at headings, clauses, tables, and paragraph breaks.
+
+### Left for later
+
+- **LTR-001**: OCR. Send any page that comes back with almost no text to Amazon Textract, one page at a time. Then a scanned PDF works too.
+- **LTR-002**: Recording how each page was read, so a source link can say the text came from OCR.
+- **LTR-003**: Virus scanning on upload.
+
+Dropping OCR is the single biggest saving here, and it costs us nothing in the demo as long as we
+choose the demo PDFs ourselves. Most RBI circulars are published with a text layer already.
 
 ### How to cut chunks
 
@@ -81,15 +88,15 @@ the thing a compliance person quotes, so cutting there is what makes a source li
 ## 5. Acceptance Criteria
 
 - **AC-001**: Upload a normal PDF. We get the text and the document details.
-- **AC-002**: Upload a scanned PDF. We try OCR on it.
+- **AC-002**: Upload a scanned PDF. The job does not crash, and it says the pages could not be read.
 - **AC-003**: Upload a broken file. The job fails and the user can see why.
 - **AC-004**: Upload the same file twice. The system points at the copy it already has.
 - **AC-005**: Upload a document with numbered clauses. The chunks keep their page and clause numbers.
 
 ## 6. Test Automation Strategy
 
-Test normal PDFs, scanned PDFs, ones that are part scanned, tables, two-column pages, blank
-pages, broken files, duplicate files, and very big files.
+Test normal PDFs, tables, two-column pages, blank pages, broken files, and duplicate files. A
+scanned PDF is a test too, but the expected result is a clear "could not read this", not text.
 
 ## 7. Rationale & Context
 
@@ -102,7 +109,7 @@ clause along the way, we cannot show our sources, and the report is worth much l
 - **EXT-001**: Regulator websites. A person downloads from them and uploads to us. Our code never fetches from them.
 
 ### Third-Party Services
-- **SVC-001**: Amazon Textract, for OCR on single pages.
+- **SVC-001**: None. Amazon Textract comes in later, with LTR-001.
 
 ### Infrastructure Dependencies
 - **INF-001**: Amazon S3, the job queue, the worker, and the database.
@@ -111,7 +118,7 @@ clause along the way, we cannot show our sources, and the report is worth much l
 - **DAT-001**: Rule PDFs and their details.
 
 ### Technology Platform Dependencies
-- **PLT-001**: `pypdf` to read text, and something that can call Textract for OCR.
+- **PLT-001**: `pypdf` to read text.
 
 ### Compliance Dependencies
 - **COM-001**: The source must stay intact and checkable.
@@ -121,10 +128,12 @@ clause along the way, we cannot show our sources, and the report is worth much l
 ```text
 A PDF where most pages have real text, but page 7 is just an image:
 1. Keep the normal text from the other pages.
-2. Run OCR on page 7 only.
-3. Mark page 7 as read by OCR.
-4. Keep page 7 usable in source links.
+2. Record page 7 as unread.
+3. Show on screen that page 7 could not be read.
+4. Do not act as if the document is complete.
 ```
+
+Later, with LTR-001, step 2 becomes "run OCR on page 7" instead.
 
 ## 10. Validation Criteria
 

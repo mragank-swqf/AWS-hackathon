@@ -36,14 +36,23 @@ what.
 - **REQ-006**: A chunk row must hold the chunk text, its source info, its embedding, and its keyword index. All on the same row.
 - **REQ-007**: A chunk must come from one source only. Either a rule document or a company document. Never both.
 - **REQ-008**: Chunks from rule documents must have an empty `company_id`, because all companies share them. Chunks from company documents must have a `company_id`.
-- **REQ-009**: Every rule document must say if it is still in force. If a newer document replaced it, we must store which one.
-- **REQ-010**: To stop anyone editing the audit log, take away `UPDATE` and `DELETE` from the app's database user.
-- **REQ-011**: Each source link must record whether we checked that the source really says what we claim.
+- **REQ-009**: Each source link must record whether we checked that the source really says what we claim.
 - **SEC-001**: Give the database user only the rights it needs, nothing more.
 - **SEC-002**: Data must be encrypted on disk and while moving over the network.
 - **CON-001**: Deleting a company must not delete rule documents. Other companies use those too.
 - **GUD-001**: Use normal columns for things we search on. Use JSONB for the AI output, which will keep changing shape.
 - **GUD-002**: Where we can, make the database enforce the rules. Do not rely on app code alone.
+
+### Left for later
+
+- **LTR-001**: The `users` and `company_users` tables. There is no login yet, so there is one fixed demo user.
+- **LTR-002**: The `audit_logs` table, add-only, with `UPDATE` and `DELETE` taken away from the app's database user.
+- **LTR-003**: `lifecycle_status` and `superseded_by` on rule documents, for tracking which ones have been replaced.
+- **LTR-004**: The `verification_results` table. For now the checking step's output goes in the `result` JSONB column on the analysis.
+
+Note what is not on this list. `company_id` stays on every row it belongs on, and so do the
+constraints on `document_chunks`. Those cost nothing to keep now and are painful to add back
+later.
 
 ## 4. Interfaces & Data Contracts
 
@@ -51,21 +60,19 @@ Tables we need:
 
 ```text
 companies
-users
-company_users
 regulatory_documents
 document_chunks
 company_policies
-company_controls
 impact_analyses
 regulatory_requirements
 compliance_gaps
 action_items
 citations
-verification_results
 reviews
-audit_logs
 ```
+
+Ten tables, not fifteen. Left out for now: `users`, `company_users`, `audit_logs`,
+`verification_results`, and `company_controls`. See the list above.
 
 Search runs in the database. The `vector` add-on handles search by meaning. A generated
 `TSVECTOR` column handles search by keyword. Both live on the same row. That means one query, one
@@ -156,9 +163,7 @@ CREATE TABLE company_policies (
 );
 ```
 
-Each rule document says whether it is still in force, and which document replaced it. This
-matters. Handing someone a confident task list based on a rule that was withdrawn is just wrong.
-The MVP records this but does not act on it by itself.
+The rule document table. `lifecycle_status` and `superseded_by` are left for later, per LTR-003.
 
 ```sql
 CREATE TABLE regulatory_documents (
@@ -174,12 +179,7 @@ CREATE TABLE regulatory_documents (
     content_hash TEXT NOT NULL UNIQUE,
     pages INTEGER,
     processing_status TEXT NOT NULL,
-    lifecycle_status TEXT NOT NULL DEFAULT 'active',
-    superseded_by UUID REFERENCES regulatory_documents(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT superseded_has_successor CHECK (
-        lifecycle_status <> 'superseded' OR superseded_by IS NOT NULL
-    )
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -198,28 +198,6 @@ CREATE TABLE citations (
     relevance_verified BOOLEAN,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
-
-The audit log is add-only. We make that real by taking away the app's rights to change it. We do
-not just ask people not to.
-
-```sql
-CREATE TABLE audit_logs (
-    id BIGSERIAL PRIMARY KEY,
-    actor_user_id UUID REFERENCES users(id),
-    company_id UUID REFERENCES companies(id),
-    action TEXT NOT NULL,
-    resource_type TEXT NOT NULL,
-    resource_id UUID,
-    outcome TEXT NOT NULL,
-    request_id TEXT,
-    ip_address INET,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX ON audit_logs (company_id, created_at DESC);
-
-REVOKE UPDATE, DELETE ON audit_logs FROM regimpact_app;
 ```
 
 One more table, as an example of the pattern:
@@ -245,15 +223,14 @@ CREATE TABLE impact_analyses (
 - **AC-001**: You can create a company and read it back.
 - **AC-002**: You can link a document to an analysis.
 - **AC-003**: Results are still there after the worker finishes.
-- **AC-004**: Company A cannot read Company B's documents or analyses.
-- **AC-005**: The log gets a row for upload, analysis, approval, and any blocked access.
-- **AC-006**: The database refuses a chunk row that points at both a rule document and a company document.
-- **AC-007**: Both kinds of search return rows from the same chunk table.
+- **AC-004**: The database refuses a chunk row that points at both a rule document and a company document.
+- **AC-005**: Both kinds of search return rows from the same chunk table.
+- **AC-006**: A search for one company never returns another company's chunks.
 
 ## 6. Test Automation Strategy
 
-Test the migrations, the foreign keys, the indexes, that companies stay separate, that a failed
-transaction rolls back, that two writes at once behave, and that a backup can be restored.
+Test that the migrations run, that the `document_chunks` constraints hold, and that both kinds of
+search return something. Backup and restore testing is left for later.
 
 ## 7. Rationale & Context
 

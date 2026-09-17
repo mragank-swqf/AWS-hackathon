@@ -1,6 +1,6 @@
 ---
 title: RegImpact MVP Delivery and Implementation Process Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -10,12 +10,12 @@ tags: [process, mvp, delivery, hackathon]
 # Introduction
 
 This spec says what order we build things in, what is in the MVP and what is not, and what has to
-work by demo day.
+work for the demo.
 
 ## 1. Purpose & Scope
 
-We have two weeks. So the plan is built around getting one whole flow working, start to finish,
-rather than lots of half-done parts.
+The plan is built around getting one whole flow working, start to finish, rather than lots of
+half-done parts.
 
 ## 2. Definitions
 
@@ -34,22 +34,48 @@ rather than lots of half-done parts.
 - **REQ-005**: The MVP must include a simple task list.
 - **CON-001**: Do not build anything that files reports with a regulator.
 - **CON-002**: Do not try to cover every regulator.
+- **CON-003**: There is no login in the hackathon build. Use one fixed demo user and one demo company.
 - **GUD-001**: Use one fixed demo company and a few chosen documents. Then the demo behaves the same way every time.
 - **PAT-001**: Build thin slices that work end to end, early. Do not build each layer on its own and hope they join up at the end.
 
+### Left for later
+
+These are all specified elsewhere and are worth building one day. None of them show up in the
+demo, so none of them are in the hackathon build. Each spec that describes one says the same
+thing.
+
+| Left out | Why it is safe to skip |
+|---|---|
+| Login, roles, permissions | The biggest job with the least to show. One fixed demo user does the same demo. |
+| OCR through Textract | Pick demo PDFs that already have a text layer, and we never need it. |
+| Dashboard | The demo never opens it. The analysis screen is where the story is. |
+| Audit log | Good practice, invisible in a demo. |
+| Upload caps, paging, duplicate-request handling | Only matter with real users and real load. |
+| Tracking replaced rule documents | Only matters once there are many documents. |
+| A test coverage target | Keep the quick tests. Drop the number. |
+
+Write these down in the talk as things we know we left out. Saying "we cut login on purpose" is
+much stronger than being asked about it and having no answer.
+
 ## 4. Interfaces & Data Contracts
 
-### Plan
+### Build order
 
-| Days | What gets done |
+Build in this order. The order is what matters, not a calendar.
+
+| Stage | What gets done |
 |---|---|
-| 1–2 | Backend, database with `pgvector`, login, empty web app, upload for both kinds of document |
-| 3–4 | Reading text with OCR fallback, cutting chunks at clauses, Titan embeddings, both kinds of search |
-| 5–6 | The applicability step and the requirements step |
-| 7–8 | Impact, gaps, risk, tasks |
-| 9–10 | Source links, checking, review |
-| 11–12 | Dashboard, task list, security |
-| 13–14 | Quality checks, polish, practise the demo |
+| 1 | Database with `pgvector`, backend, empty web app, upload for rule documents and company documents |
+| 2 | Pulling out text, cutting chunks at clauses, Titan embeddings, both kinds of search |
+| 3 | The applicability step and the requirements step |
+| 4 | Impact, gaps, risk from the table, tasks |
+| 5 | Source links you can click, the checking step, an approve button |
+| 6 | Load the demo data and practise the demo |
+
+Stage 1 and stage 2 are the ones you cannot skip. Nothing else works without upload, chunks, and
+search. If something has to be cut, cut from the bottom of this list, not the middle.
+
+Stage 6 is not padding. A demo nobody has run start to finish will break in front of the judges.
 
 ## 5. Acceptance Criteria
 
@@ -62,7 +88,7 @@ rather than lots of half-done parts.
 
 ## 6. Test Automation Strategy
 
-Run a quick smoke test after each milestone. Run the full set before demo day. Keep one fixed set
+Run a quick smoke test after each stage. Run the full set before the demo. Keep one fixed set
 of test cases for measuring AI quality, so the numbers mean something across runs.
 
 ## 7. Rationale & Context

@@ -1,6 +1,6 @@
 ---
 title: RegImpact AWS Infrastructure and Deployment Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -34,10 +34,11 @@ deploying, and backups.
 - **REQ-005**: Keep secrets in Secrets Manager.
 - **REQ-006**: Send logs and errors to CloudWatch.
 - **REQ-007**: The database must run a PostgreSQL version that supports `pgvector`. The first migration turns the add-on on.
-- **REQ-008**: Deploy to `us-east-1`. It has the most Bedrock models. Turn on both Claude Sonnet and Titan Text Embeddings V2 in the account before we start building.
+- **REQ-008**: Deploy to `us-east-1`. It has the most Bedrock models. Turn on both Claude Sonnet and Titan Text Embeddings V2 in the account before we start building. Do this first. Waiting on model access blocks everything else.
+- **REQ-009**: No Textract in the hackathon build. Do not ask for access to it.
 - **SEC-001**: Turn off all public access to the document buckets.
 - **SEC-002**: Give each IAM role only what it needs.
-- **CON-001**: We have to be able to deploy all of this inside the two weeks.
+- **CON-001**: Keep the deploy small. When there is a choice, take the simpler option.
 - **CON-002**: Using `us-east-1` means Indian rule documents and company documents get stored outside India. That is fine for a hackathon, but write it down as a known limit. A real deployment for RBI-regulated companies would probably have to use `ap-south-1` so the data stays in India.
 - **GUD-001**: Write the infrastructure as code where we can.
 
@@ -50,13 +51,13 @@ deploying, and backups.
 | Database | RDS PostgreSQL 15+ with `pgvector` |
 | Files | S3 |
 | Queue | SQS |
-| OCR | Textract, one page at a time, only when needed |
 | AI model | Bedrock, Claude Sonnet, for every AI step |
 | Embeddings | Bedrock Titan Text Embeddings V2, 1024 numbers |
 | Search | `pgvector` for meaning, PostgreSQL full-text for keywords |
 | Secrets | Secrets Manager |
 | Logs | CloudWatch |
-| Login | Tokens we issue ourselves |
+| Login | None. One fixed demo user. |
+| OCR | None. Left for later. |
 
 ## 5. Acceptance Criteria
 
@@ -74,8 +75,8 @@ permissions are right, a backup restores, and a rollback works.
 
 ## 7. Rationale & Context
 
-We use managed AWS services because we do not have time to run our own. They also give us
-security and scaling for free, and it is an AWS hackathon, so using them is the point.
+We use managed AWS services so we have less to run ourselves. They also give us security and
+scaling for free, and it is an AWS hackathon, so using them is the point.
 
 ## 8. Dependencies & External Integrations
 
@@ -84,7 +85,7 @@ security and scaling for free, and it is an AWS hackathon, so using them is the 
 
 ### Third-Party Services
 - **SVC-001**: Amazon Bedrock.
-- **SVC-002**: Amazon Textract.
+- **SVC-002**: Amazon Textract, later.
 
 ### Infrastructure Dependencies
 - **INF-001**: S3, CloudFront, ECS or App Runner, RDS PostgreSQL with `pgvector`, SQS, CloudWatch, Secrets Manager.

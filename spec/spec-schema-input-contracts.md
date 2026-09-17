@@ -51,7 +51,7 @@ organization_type:    payment_aggregator | payment_gateway | nbfc | lending_plat
 document_type:        circular | master_direction | notification | guideline | faq |
                       press_release
 processing_status:    queued | extracting | chunking | embedding | completed | failed
-extraction_method:    text | ocr | text_plus_ocr
+extraction_method:    text | unreadable
 analysis_status:      queued | processing | completed | failed | cancelled
 analysis_depth:       quick | standard | deep
 applicability:        applicable | likely_applicable | uncertain |
@@ -62,24 +62,19 @@ gap_status:           compliant | partial | non_compliant | insufficient_evidenc
 severity:             critical | high | medium | low
 overall_risk:         critical | high | medium | low
 verification_status:  verified | partially_verified | unverified | failed
-review_status:        pending | approved | rejected | more_evidence_requested
+review_status:        pending | approved | rejected
 action_status:        open | in_progress | blocked | done
 evidence_type:        policy | procedure | control_description | audit_report | other
-role:                 admin | compliance_officer | reviewer | analyst | viewer
-lifecycle_status:     active | superseded | withdrawn | draft
 date_basis:           cited_effective | cited_compliance | inferred_recommendation
 deadline_proximity:   overdue | under_30_days | under_90_days | beyond_90_days | none
 effort:               low | medium | high
 department:           Compliance | Legal | Risk | Operations | Product | Engineering |
                       Finance | Customer Support | Information Security |
                       Internal Audit | Human Resources
-audit_outcome:        success | denied | failure
-audit_action:         user.login | user.login_failed | company.create | company.update |
-                      regulation.upload | policy.upload | policy.delete |
-                      analysis.start | analysis.complete | analysis.fail |
-                      analysis.approve | analysis.reject | analysis.request_review |
-                      action.update | citation.source_access | access.denied
 ```
+
+Left for later, along with the features that use them: `role`, `lifecycle_status`,
+`audit_outcome`, `audit_action`, and the `more_evidence_requested` value on `review_status`.
 
 `analysis_depth` changes how much text we search and how much it costs. Nothing else.
 

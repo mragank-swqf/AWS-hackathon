@@ -1,6 +1,6 @@
 ---
 title: RegImpact Testing and AI Evaluation Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -28,21 +28,29 @@ measuring AI output quality: are the answers any good. Both matter.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: Every important endpoint needs unit tests and tests against a real database.
-- **REQ-002**: The main journey, upload to report, needs one full test.
-- **REQ-003**: Test search with a list of questions where we already know the right chunks.
-- **REQ-004**: Score the AI output on applicability, requirements, sources, gaps, and tasks.
-- **REQ-005**: Test that companies stay apart. Include one test where a search run for company A never returns company B's chunks.
-- **REQ-006**: Measure how long an analysis takes and how often jobs fail.
-- **REQ-007**: Test the risk table and the review rules with a case for every box and every line. Both are plain code, so these tests need no AI call and run in CI.
-- **REQ-008**: For every fixed value list in `spec-schema-input-contracts.md`, add a test proving a value not on the list gets rejected.
-- **REQ-009**: Test that running a job twice is safe. Send the same job twice and check no step runs again.
-- **REQ-010**: Keep a set of documents with hidden instructions in them. Report how often we resist them, next to the search and source numbers.
-- **REQ-011**: Test every possible review move, and check that any move not on the list gets refused.
-- **REQ-012**: For every output shape in `spec-schema-agent-contracts.md`, add test cases with missing sources, fields the step is not allowed to send, and values not on the list.
+This list is short on purpose. Every test here is either quick to write or protects something
+the demo depends on.
+
+- **REQ-001**: Test the risk table and the review rules with a case for every box and every line. Both are plain code, so these run in seconds with no AI call. Write these first. They are the cheapest tests in the project.
+- **REQ-002**: For every output shape in `spec-schema-agent-contracts.md`, add test cases with missing sources, fields the step is not allowed to send, and values not on the list.
+- **REQ-003**: For every fixed value list in `spec-schema-input-contracts.md`, add a test proving a value not on the list gets rejected.
+- **REQ-004**: One full test of the main journey: upload a rule document, upload a company document, run the analysis, open a source link, approve.
+- **REQ-005**: One test that a search for company A never returns company B's chunks.
+- **REQ-006**: Keep a small set of questions where we know the right chunks, and check search finds them. Ten questions is enough to catch a broken search.
 - **CON-001**: Never use real customer data in tests.
 - **CON-002**: Do not test plain code through the AI. Call the risk table, the review rules, and the merge step directly.
-- **GUD-001**: Where we are allowed, save what went into the AI, what came out, and the right answer. Then we can compare runs later.
+- **GUD-001**: Save what went into the AI and what came out. Even without scoring it, having the record helps when something looks wrong.
+
+### Left for later
+
+- **LTR-001**: A coverage target. We had 70%. Drop the number for now, keep writing the quick tests.
+- **LTR-002**: Scoring AI output properly on applicability, requirements, sources, gaps, and tasks.
+- **LTR-003**: Measuring Recall@K, Precision@K, and MRR against a proper labelled set.
+- **LTR-004**: Speed and failure-rate measurements.
+- **LTR-005**: A set of documents with hidden instructions, to measure how well the prompt fencing holds.
+- **LTR-006**: Testing every review move, once there is more than approve and reject.
+- **LTR-007**: Testing that running a job twice is safe.
+- **LTR-008**: Backup and restore testing.
 
 ## 4. Interfaces & Data Contracts
 
@@ -65,22 +73,20 @@ One test case record:
 
 ## 5. Acceptance Criteria
 
-- **AC-001**: Unit tests pass in CI.
-- **AC-002**: API contract tests pass.
+- **AC-001**: The risk table and review rule tests pass.
+- **AC-002**: The output shape tests pass, including the ones that should fail.
 - **AC-003**: The full upload-to-report test passes.
-- **AC-004**: We have written down the search quality numbers.
-- **AC-005**: We know how often the AI makes a point it cannot back up.
-- **AC-006**: The security and permission tests pass.
-- **AC-007**: The speed numbers are written down.
+- **AC-004**: The company separation test passes.
+- **AC-005**: Search finds the right chunk for the ten known questions.
 
 ## 6. Test Automation Strategy
 
-- **Test Levels**: Unit, against a database, full journey, security, speed, and AI quality.
-- **Frameworks**: Pytest with `pytest-asyncio` and `pytest-cov` for the backend. Playwright in the frontend for browser tests. Contract tests against the API spec.
-- **Test Data Management**: Made-up companies, a few real public rule documents, and written-down right answers.
-- **CI/CD Integration**: Run the tests on every pull request and before every deploy.
-- **Coverage Requirements**: At least 70% of the important backend code.
-- **Performance Testing**: Time the upload, the text extraction, the search, and the whole analysis.
+- **Test Levels**: Plain unit tests, shape checks, and one full journey test.
+- **Frameworks**: Pytest with `pytest-asyncio`. Skip Playwright for now.
+- **Test Data Management**: One made-up company, a few real public rule documents, and ten search questions with known answers.
+- **CI/CD Integration**: Run the tests on every push.
+- **Coverage Requirements**: No number. Write the cheap tests listed above.
+- **Performance Testing**: Left for later.
 
 ## 7. Rationale & Context
 

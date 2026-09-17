@@ -1,6 +1,6 @@
 ---
 title: RegImpact System Architecture Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
 last_updated: 2026-09-17
 owner: RegImpact Team
@@ -33,8 +33,7 @@ the database, logging, and the review flow.
 - **REQ-004**: The state of each analysis must be saved in the database.
 - **REQ-005**: Every AI output must be checked against a schema, then checked for sources.
 - **SEC-001**: Passwords and keys must come from a secrets service.
-- **SEC-002**: Our own services must log in to each other. Nothing is open.
-- **CON-001**: We must be able to build and deploy all of this in two weeks.
+- **CON-001**: When there is a choice, take the simpler option.
 - **GUD-001**: Use AWS managed services so we have less to run ourselves.
 
 ## 4. Interfaces & Data Contracts
@@ -44,18 +43,21 @@ React Frontend
     ↓ HTTPS
 API Gateway / Load Balancer
     ↓
-Backend API  (JWT auth, RBAC, company scoping)
+Backend API  (no login, company scoping only)
     ├── PostgreSQL + pgvector   (entities, chunks, embeddings, full-text index)
     ├── S3                      (original documents, private)
     └── SQS
           ↓
       Worker Service
-          ├── pypdf → Textract   (per-page OCR fallback)
+          ├── pypdf              (text layer only, no OCR)
           ├── Bedrock Titan v2   (embeddings)
           ├── Hybrid Retrieval   (pgvector + Postgres FTS, RRF fused)
           ├── Bedrock LLM        (6 AI steps)
           └── Verification       (citation coverage, unsupported claims)
 ```
+
+Two things are missing on purpose. There is no login, and there is no OCR. Both are listed as
+left for later in their own specs.
 
 There is no separate search service. Both kinds of search are just SQL queries on the same
 `document_chunks` table. That way the rule that keeps one company's data away from another sits
@@ -77,8 +79,7 @@ database connects, that file permissions are right, and that a fresh deploy work
 ## 7. Rationale & Context
 
 User requests are fast. Reading PDFs and running AI is slow. So we keep them apart, and the slow
-work goes in the background. We use managed AWS services because we do not have time to run our
-own during a hackathon.
+work goes in the background. We use managed AWS services so we have less to run ourselves.
 
 ## 8. Dependencies & External Integrations
 
@@ -88,7 +89,6 @@ own during a hackathon.
 
 ### Third-Party Services
 - **SVC-001**: Amazon Bedrock.
-- **SVC-002**: Amazon Textract.
 
 ### Infrastructure Dependencies
 - **INF-001**: S3, RDS PostgreSQL with `pgvector`, SQS, ECS or App Runner, CloudWatch, Secrets Manager, and CloudFront.
@@ -100,7 +100,7 @@ own during a hackathon.
 - **PLT-001**: A container or serverless runtime on AWS.
 
 ### Compliance Dependencies
-- **COM-001**: Keep each company's data separate, log important actions, and let a person review.
+- **COM-001**: Keep each company's data separate, and let a person review. Logging important actions is left for later.
 
 ## 9. Examples & Edge Cases
 

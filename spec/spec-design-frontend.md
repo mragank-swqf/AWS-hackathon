@@ -25,34 +25,45 @@ the sources, and track the tasks that come out of it.
 
 ## 3. Requirements, Constraints & Guidelines
 
-- **REQ-001**: There must be a login, or a demo way in.
-- **REQ-002**: The dashboard shows recent analyses, risky findings, open gaps, and dates. Split the dates by `date_basis`. Only `cited_effective` and `cited_compliance` dates may be shown as real deadlines. Dates we came up with go in their own group, clearly marked as suggestions. Never show a date we made up as something the regulator asked for.
-- **REQ-003**: The rule library lets a user upload, search, and filter.
+- **REQ-001**: There is no login screen. The app opens straight onto the demo company.
+- **REQ-002**: The rule library lets a user upload and see a list.
+- **REQ-003**: The evidence library lets a user upload company documents, and shows how far each one got.
 - **REQ-004**: The analysis screen shows applicability, requirements, who is affected, gaps, risk, tasks, and sources.
-- **REQ-005**: A reviewer can approve, reject, or ask for more proof.
-- **REQ-006**: Every screen needs a loading state, a working state, an empty state, and an error state.
-- **REQ-007**: The evidence library lets a user upload company documents, and shows how far each one got.
-- **REQ-008**: A user can click any finding and see the source: the actual lines, the page range, the clause number, and whether the text came from OCR.
-- **REQ-009**: If an analysis is running against a rule document that is no longer `active`, show a clear warning on the screen and name the document that replaced it.
+- **REQ-005**: A reviewer can approve or reject.
+- **REQ-006**: Every screen needs a loading state, a working state, an empty state, and an error state. The analysis screen needs this most, because it is the one the user waits on.
+- **REQ-007**: A user can click any finding and see the source: the actual lines, the page range, and the clause number.
+- **REQ-008**: Dates must be split by `date_basis` wherever they appear. Only `cited_effective` and `cited_compliance` may be shown as real deadlines. A date we came up with must be clearly marked as a suggestion. Never show a date we made up as something the regulator asked for.
 - **SEC-001**: Never put API keys in the web app.
 - **CON-001**: One whole working flow beats ten half-built screens.
 - **GUD-001**: Say plainly when we are not sure. Never make AI output look like final legal advice.
+
+### Left for later
+
+- **LTR-001**: A login screen.
+- **LTR-002**: The dashboard, showing recent analyses, risky findings, open gaps, and dates.
+- **LTR-003**: Search and filters on the rule library.
+- **LTR-004**: Asking the user for more proof, as a review option.
+- **LTR-005**: A warning when the rule document has been replaced by a newer one.
+- **LTR-006**: Showing whether a piece of source text came from OCR. Nothing comes from OCR yet.
+
+The dashboard is the one that looks like a loss and is not. The demo never opens it, and a
+half-finished dashboard on screen does more harm than no dashboard at all.
 
 ## 4. Interfaces & Data Contracts
 
 Screens we need:
 
 ```text
-Login
-Dashboard
 Company Profile
 Regulation Library
 Evidence Library
 Analysis Setup
-Analysis Results
+Analysis Results   (includes approve and reject)
 Action Tracker
-Review Screen
 ```
+
+Six screens, not nine. Login and the dashboard are gone, and the review screen is folded into the
+analysis results page, because approving is one button and does not need its own page.
 
 The Evidence Library is where a user uploads their own policies, and where they see how far each
 upload got. We cannot skip it. Without uploaded documents, gap checking has nothing to compare
@@ -75,15 +86,16 @@ Reviewer Status
 
 - **AC-001**: A user can fill in a company profile from the screen.
 - **AC-002**: A user can upload a rule document and watch it being processed.
-- **AC-003**: A user can start an analysis and see how it is going.
-- **AC-004**: A user can click through to a source.
-- **AC-005**: A reviewer can approve or reject a report.
-- **AC-006**: The screens still work on a phone-sized window.
+- **AC-003**: A user can upload a company document and watch it being processed.
+- **AC-004**: A user can start an analysis and see how it is going.
+- **AC-005**: A user can click through to a source and read the actual lines.
+- **AC-006**: A reviewer can approve or reject a report, and the status visibly changes.
 
 ## 6. Test Automation Strategy
 
-Test the components on their own. Test screens against a fake API. Then use Playwright to walk
-the whole thing: log in, upload, analyse, review, and check the task list.
+Walk the demo path by hand, several times. If there is time left over, add one Playwright test
+that does the same walk. Automated browser tests are the first thing to cut here, because the
+demo path gets walked by a person anyway.
 
 ## 7. Rationale & Context
 
