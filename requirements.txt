@@ -1,0 +1,48 @@
+# RegImpact - Python backend dependencies
+
+# API server
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-multipart
+
+# Database
+sqlalchemy
+psycopg2-binary
+alembic
+
+# AWS
+boto3
+
+# RAG and document processing
+langchain
+langchain-community
+langchain-text-splitters
+langgraph
+pypdf
+python-docx
+beautifulsoup4
+
+# Embeddings and vector search
+sentence-transformers
+chromadb
+numpy
+
+# HTTP and utilities
+httpx
+requests
+python-dotenv
+orjson
+
+# Security and authentication
+PyJWT
+passlib[bcrypt]
+
+# Testing
+pytest
+pytest-asyncio
+
+# Observability and validation
+structlog
+jsonschema
