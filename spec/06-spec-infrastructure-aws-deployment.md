@@ -112,6 +112,6 @@ and a check that logs are arriving.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-architecture-system.md`
-- `spec-tool-api-contracts.md`
-- `spec-process-document-ingestion.md`
+- `03-spec-architecture-system.md`
+- `08-spec-tool-api-contracts.md`
+- `10-spec-process-document-ingestion.md`

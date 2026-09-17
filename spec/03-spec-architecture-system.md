@@ -114,6 +114,6 @@ the system recovering from at least one outside service failing.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-infrastructure-aws-deployment.md`
-- `spec-tool-api-contracts.md`
-- `spec-process-agent-orchestration.md`
+- `06-spec-infrastructure-aws-deployment.md`
+- `08-spec-tool-api-contracts.md`
+- `13-spec-process-agent-orchestration.md`

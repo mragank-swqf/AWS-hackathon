@@ -1,0 +1,15 @@
+---
+description: Implement already-written RegImpact specs as code (no interview, no new product spec).
+alwaysApply: false
+---
+
+When the user wants the product built from the written specs, follow
+`.agents/skill/implement-spec/SKILL.md` the way Apple design reviews follow that skill.
+
+- Do not interview. Do not write a new product spec. Do not wait for approval.
+- Implement `spec/01`–`spec/17` one MVP stage at a time. Default: first incomplete stage.
+- Start coding in the same turn. Progress logs go in `spec/impl/` only.
+- Verify with `pytest` and `ruff check .`. Do not commit unless asked.
+
+Trigger when the user asks to implement the specs, start coding, build the MVP, build a stage,
+continue implementation, or make the app from the specs.

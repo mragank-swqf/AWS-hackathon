@@ -134,6 +134,6 @@ loading and error states behave.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-tool-api-contracts.md`
-- `spec-process-impact-analysis.md`
-- `spec-architecture-system.md`
+- `08-spec-tool-api-contracts.md`
+- `14-spec-process-impact-analysis.md`
+- `03-spec-architecture-system.md`

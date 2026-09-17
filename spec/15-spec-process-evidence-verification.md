@@ -45,7 +45,7 @@ backing, checking dates, checking applicability, and deciding when a person must
 
 The checking step only reports what it found. The runner sets `verification_status` using the
 REQ-007 cut-offs, and works out `requires_human_review` from the list in
-`spec-process-agent-orchestration.md`. The step itself returns neither.
+`13-spec-process-agent-orchestration.md`. The step itself returns neither.
 
 ```json
 {
@@ -60,7 +60,7 @@ REQ-007 cut-offs, and works out `requires_human_review` from the list in
 ```
 
 For this example the runner would then set `verification_status: "partially_verified"` and
-`requires_human_review: true`. The full output shape is in `spec-schema-agent-contracts.md`.
+`requires_human_review: true`. The full output shape is in `12-spec-schema-agent-contracts.md`.
 
 ## 5. Acceptance Criteria
 
@@ -115,6 +115,6 @@ back a clear status.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-rag-pipeline.md`
-- `spec-process-impact-analysis.md`
-- `spec-tool-api-contracts.md`
+- `11-spec-process-rag-pipeline.md`
+- `14-spec-process-impact-analysis.md`
+- `08-spec-tool-api-contracts.md`

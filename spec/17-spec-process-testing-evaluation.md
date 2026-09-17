@@ -32,8 +32,8 @@ This list is short on purpose. Every test here is either quick to write or prote
 the demo depends on.
 
 - **REQ-001**: Test the risk table and the review rules with a case for every box and every line. Both are plain code, so these run in seconds with no AI call. Write these first. They are the cheapest tests in the project.
-- **REQ-002**: For every output shape in `spec-schema-agent-contracts.md`, add test cases with missing sources, fields the step is not allowed to send, and values not on the list.
-- **REQ-003**: For every fixed value list in `spec-schema-input-contracts.md`, add a test proving a value not on the list gets rejected.
+- **REQ-002**: For every output shape in `12-spec-schema-agent-contracts.md`, add test cases with missing sources, fields the step is not allowed to send, and values not on the list.
+- **REQ-003**: For every fixed value list in `04-spec-schema-input-contracts.md`, add a test proving a value not on the list gets rejected.
 - **REQ-004**: One full test of the main journey: upload a rule document, upload a company document, run the analysis, open a source link, approve.
 - **REQ-005**: One test that a search for company A never returns company B's chunks.
 - **REQ-006**: Keep a small set of questions where we know the right chunks, and check search finds them. Ten questions is enough to catch a broken search.
@@ -126,6 +126,6 @@ quality numbers.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-rag-pipeline.md`
-- `spec-process-evidence-verification.md`
-- `spec-process-mvp-delivery.md`
+- `11-spec-process-rag-pipeline.md`
+- `15-spec-process-evidence-verification.md`
+- `02-spec-process-mvp-delivery.md`

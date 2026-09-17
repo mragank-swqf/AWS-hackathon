@@ -37,7 +37,7 @@ affected, what is missing, how bad is it, what should we do, and can we back it 
 - **REQ-009**: Running the same job twice must be safe. SQS can deliver a job more than once. So if a step is already marked done for that analysis, skip it.
 - **REQ-010**: If a job runs out of retries, move it to the dead-letter queue, mark the analysis `failed`, and record which step broke.
 - **REQ-011**: There are seven steps but only six AI calls. The `risk` step is plain code with no AI call, because we work out severity from a table instead of asking. It still shows up as a step so the trail is complete.
-- **REQ-012**: The output shapes live in `spec-schema-agent-contracts.md`. The runner owns `confidence`, `verification_status`, and `human_review_required`. No AI step may return those.
+- **REQ-012**: The output shapes live in `12-spec-schema-agent-contracts.md`. The runner owns `confidence`, `verification_status`, and `human_review_required`. No AI step may return those.
 - **SEC-001**: Give each step only the company data it needs, and nothing else.
 - **CON-001**: No step may change anything in a live system.
 - **CON-002**: Read and check every AI output against a Pydantic model before saving it or passing it on.
@@ -153,7 +153,7 @@ Every step's output must match its schema, and every run must leave a trail we c
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-agent-contracts.md`
-- `spec-process-impact-analysis.md`
-- `spec-process-evidence-verification.md`
-- `spec-tool-api-contracts.md`
+- `12-spec-schema-agent-contracts.md`
+- `14-spec-process-impact-analysis.md`
+- `15-spec-process-evidence-verification.md`
+- `08-spec-tool-api-contracts.md`

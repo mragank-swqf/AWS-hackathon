@@ -208,7 +208,7 @@ and receives must match what is written here.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-product-definition.md`
-- `spec-schema-agent-contracts.md`
-- `spec-tool-api-contracts.md`
-- `spec-data-database.md`
+- `01-spec-schema-product-definition.md`
+- `12-spec-schema-agent-contracts.md`
+- `08-spec-tool-api-contracts.md`
+- `05-spec-data-database.md`

@@ -131,7 +131,7 @@ approved list of tasks.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-input-contracts.md`
-- `spec-schema-agent-contracts.md`
-- `spec-process-impact-analysis.md`
-- `spec-architecture-system.md`
+- `04-spec-schema-input-contracts.md`
+- `12-spec-schema-agent-contracts.md`
+- `14-spec-process-impact-analysis.md`
+- `03-spec-architecture-system.md`

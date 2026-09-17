@@ -128,6 +128,6 @@ reviewing, shows the task list, and does all of that the same way every time.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-product-definition.md`
-- `spec-design-frontend.md`
-- `spec-process-mvp-delivery.md`
+- `01-spec-schema-product-definition.md`
+- `09-spec-design-frontend.md`
+- `02-spec-process-mvp-delivery.md`

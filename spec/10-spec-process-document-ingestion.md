@@ -142,6 +142,6 @@ can trace every bit of text back to a page.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-rag-pipeline.md`
-- `spec-data-database.md`
-- `spec-architecture-system.md`
+- `11-spec-process-rag-pipeline.md`
+- `05-spec-data-database.md`
+- `03-spec-architecture-system.md`

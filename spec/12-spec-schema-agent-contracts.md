@@ -10,7 +10,7 @@ tags: [schema, agents, contracts, validation, ai]
 # Introduction
 
 This spec gives the exact output shape for every step in the analysis. These shapes are what the
-worker is built around. `REQ-002` in `spec-process-agent-orchestration.md` asks for them.
+worker is built around. `REQ-002` in `13-spec-process-agent-orchestration.md` asks for them.
 
 ## 1. Purpose & Scope
 
@@ -30,7 +30,7 @@ anyway, because it is still a step in the run and it still produces output like 
 ## 3. Requirements, Constraints & Guidelines
 
 - **REQ-001**: Check every step's output against its shape before saving it.
-- **REQ-002**: Every fixed value must come from the lists in `spec-schema-input-contracts.md`. No step may invent a new one.
+- **REQ-002**: Every fixed value must come from the lists in `04-spec-schema-input-contracts.md`. No step may invent a new one.
 - **REQ-003**: Every field where the AI made a judgement must come with `source_chunk_id` or `supporting_chunk_ids`.
 - **REQ-004**: When a step cannot answer, it must say so. If the shape allows `uncertain` or an empty list, that is the right answer. Do not guess.
 - **REQ-005**: Every requirement must carry a `verbatim_quote`, so later steps and reviewers can tell the source wording from our wording.
@@ -127,7 +127,7 @@ It is not a close call.
 
 ### Step 5: Risk (plain code)
 
-No AI call. Worked out from the table in `spec-process-impact-analysis.md`. We copy the inputs
+No AI call. Worked out from the table in `14-spec-process-impact-analysis.md`. We copy the inputs
 into the output too, so anyone can redo the sum later and see how we got there.
 
 ```json
@@ -170,7 +170,7 @@ source may use a `cited_` value.
 ### Step 7: Verification
 
 This step only reports what it found. The runner sets `verification_status` using the cut-offs in
-`spec-process-evidence-verification.md`, and decides whether a person must review.
+`15-spec-process-evidence-verification.md`, and decides whether a person must review.
 
 ```json
 {
@@ -262,7 +262,7 @@ the fields the runner owns.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-agent-orchestration.md`
-- `spec-schema-input-contracts.md`
-- `spec-process-impact-analysis.md`
-- `spec-process-evidence-verification.md`
+- `13-spec-process-agent-orchestration.md`
+- `04-spec-schema-input-contracts.md`
+- `14-spec-process-impact-analysis.md`
+- `15-spec-process-evidence-verification.md`

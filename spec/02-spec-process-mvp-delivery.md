@@ -61,19 +61,32 @@ much stronger than being asked about it and having no answer.
 
 ### Build order
 
-Build in this order. The order is what matters, not a calendar.
+Build in this order. The order is what matters, not a calendar. Spec filenames are numbered
+the same way: `01` first, `17` last. If something has to be cut, cut from the highest number,
+not the middle.
 
-| Stage | What gets done |
-|---|---|
-| 1 | Database with `pgvector`, backend, empty web app, upload for rule documents and company documents |
-| 2 | Pulling out text, cutting chunks at clauses, Titan embeddings, both kinds of search |
-| 3 | The applicability step and the requirements step |
-| 4 | Impact, gaps, risk from the table, tasks |
-| 5 | Source links you can click, the checking step, an approve button |
-| 6 | Load the demo data and practise the demo |
+| Order | Spec | Stage | What gets done |
+|---|---|---|---|
+| 01 | `01-spec-schema-product-definition.md` | Plan | What the product is |
+| 02 | `02-spec-process-mvp-delivery.md` | Plan | What is in, what is out, this list |
+| 03 | `03-spec-architecture-system.md` | Plan | Parts of the system |
+| 04 | `04-spec-schema-input-contracts.md` | Plan | Incoming data and fixed value lists |
+| 05 | `05-spec-data-database.md` | 1 | Database with `pgvector` |
+| 06 | `06-spec-infrastructure-aws-deployment.md` | 1 | AWS hosting, storage, queue, models |
+| 07 | `07-spec-security-access-control.md` | 1 | Secrets, private files, `company_id` |
+| 08 | `08-spec-tool-api-contracts.md` | 1 | Backend API |
+| 09 | `09-spec-design-frontend.md` | 1 | Empty web app, then screens |
+| 10 | `10-spec-process-document-ingestion.md` | 2 | PDF upload, text, clause chunks |
+| 11 | `11-spec-process-rag-pipeline.md` | 2 | Titan embeddings, both kinds of search |
+| 12 | `12-spec-schema-agent-contracts.md` | 3 | Output shape of each AI step |
+| 13 | `13-spec-process-agent-orchestration.md` | 3 | Runner, retries, review flag |
+| 14 | `14-spec-process-impact-analysis.md` | 3–4 | Applicability, requirements, impact, gaps, risk, tasks |
+| 15 | `15-spec-process-evidence-verification.md` | 5 | Source links, checking step, approve |
+| 16 | `16-spec-design-demo-flow.md` | 6 | Demo data and the click path |
+| 17 | `17-spec-process-testing-evaluation.md` | Gate | Tests that must pass |
 
 Stage 1 and stage 2 are the ones you cannot skip. Nothing else works without upload, chunks, and
-search. If something has to be cut, cut from the bottom of this list, not the middle.
+search.
 
 Stage 6 is not padding. A demo nobody has run start to finish will break in front of the judges.
 
@@ -128,6 +141,6 @@ security tests pass, and we have written down what it cannot do.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-product-definition.md`
-- `spec-process-impact-analysis.md`
-- `spec-infrastructure-aws-deployment.md`
+- `01-spec-schema-product-definition.md`
+- `14-spec-process-impact-analysis.md`
+- `06-spec-infrastructure-aws-deployment.md`

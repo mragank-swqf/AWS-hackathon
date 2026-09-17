@@ -130,7 +130,7 @@ all there and they agree with each other.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-agent-orchestration.md`
-- `spec-schema-agent-contracts.md`
-- `spec-process-evidence-verification.md`
-- `spec-schema-input-contracts.md`
+- `13-spec-process-agent-orchestration.md`
+- `12-spec-schema-agent-contracts.md`
+- `15-spec-process-evidence-verification.md`
+- `04-spec-schema-input-contracts.md`

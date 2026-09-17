@@ -153,6 +153,6 @@ For later: add login, permissions, the audit log, and keeping companies apart.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-infrastructure-aws-deployment.md`
-- `spec-data-database.md`
-- `spec-tool-api-contracts.md`
+- `06-spec-infrastructure-aws-deployment.md`
+- `05-spec-data-database.md`
+- `08-spec-tool-api-contracts.md`

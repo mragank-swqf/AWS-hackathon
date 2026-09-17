@@ -125,6 +125,6 @@ that respects the company and document filters.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-process-document-ingestion.md`
-- `spec-process-agent-orchestration.md`
-- `spec-process-evidence-verification.md`
+- `10-spec-process-document-ingestion.md`
+- `13-spec-process-agent-orchestration.md`
+- `15-spec-process-evidence-verification.md`

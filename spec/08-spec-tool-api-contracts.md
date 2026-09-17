@@ -124,7 +124,7 @@ time without waiting on each other. It also makes the demo easier to run.
 - **EXT-002**: The job queue.
 
 ### Third-Party Services
-- **SVC-001**: None. There is no login. See `spec-security-access-control.md`.
+- **SVC-001**: None. There is no login. See `07-spec-security-access-control.md`.
 
 ### Infrastructure Dependencies
 - **INF-001**: Somewhere to run the API, plus the database, file storage, and the queue.
@@ -150,6 +150,6 @@ Every endpoint needs its request, response, and errors written down.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-input-contracts.md`
-- `spec-data-database.md`
-- `spec-infrastructure-aws-deployment.md`
+- `04-spec-schema-input-contracts.md`
+- `05-spec-data-database.md`
+- `06-spec-infrastructure-aws-deployment.md`

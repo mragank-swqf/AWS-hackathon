@@ -269,6 +269,6 @@ backup restore tests all pass.
 
 ## 11. Related Specifications / Further Reading
 
-- `spec-schema-input-contracts.md`
-- `spec-architecture-system.md`
-- `spec-tool-api-contracts.md`
+- `04-spec-schema-input-contracts.md`
+- `03-spec-architecture-system.md`
+- `08-spec-tool-api-contracts.md`
