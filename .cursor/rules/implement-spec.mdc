@@ -4,12 +4,13 @@ alwaysApply: false
 ---
 
 When the user wants the product built from the written specs, follow
-`.agents/skill/implement-spec/SKILL.md` the way Apple design reviews follow that skill.
+`.cursor/skills/implement-spec/SKILL.md` the way Apple design reviews follow that skill.
 
 - Do not interview. Do not write a new product spec. Do not wait for approval.
 - Implement `spec/01`–`spec/17` one MVP stage at a time. Default: first incomplete stage.
 - Start coding in the same turn. Progress logs go in `spec/impl/` only.
-- Verify with `pytest` and `ruff check .`. Do not commit unless asked.
+- Verify with `pytest` and `ruff check .` when the environment can. Do not commit unless asked.
+- Follow the spec only. No extra features. No SQLite or fake Bedrock. Missing Docker or AWS is not a stop — write the spec code and list installs at the end.
 
 Trigger when the user asks to implement the specs, start coding, build the MVP, build a stage,
 continue implementation, or make the app from the specs.

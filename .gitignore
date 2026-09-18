@@ -5,7 +5,14 @@ __pycache__/
 
 # C extensions
 *.so
-.agents/
+
+# Keep Cursor skills, commands, and rules visible in the explorer.
+# Ignore only leftover local Cursor state, not the skill folders.
+.cursor/*
+!.cursor/rules/
+!.cursor/skills/
+!.cursor/commands/
+
 # Distribution / packaging
 .Python
 build/
@@ -216,3 +223,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# Local env
+.env
+.venv/
+

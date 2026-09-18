@@ -1,0 +1,14 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: regimpact
+      POSTGRES_PASSWORD: regimpact
+      POSTGRES_DB: regimpact
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regimpact -d regimpact"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
