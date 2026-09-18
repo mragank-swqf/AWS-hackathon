@@ -8,9 +8,9 @@ from functools import lru_cache
 from typing import Any
 from uuid import UUID, uuid4
 
-import boto3
 from botocore.client import BaseClient
 
+from app.aws import client, reset_clients
 from app.config import get_settings
 
 JOB_INGEST_REGULATION = "ingest_regulation"
@@ -26,8 +26,7 @@ class QueueMessage:
 
 @lru_cache
 def sqs_client() -> BaseClient:
-    settings = get_settings()
-    return boto3.client("sqs", region_name=settings.aws_region)
+    return client("sqs")
 
 
 def enqueue_job(job_type: str, payload: dict[str, Any]) -> str:
@@ -99,3 +98,4 @@ def extend_visibility(receipt_handle: str, seconds: int) -> None:
 
 def reset_sqs_client() -> None:
     sqs_client.cache_clear()
+    reset_clients()

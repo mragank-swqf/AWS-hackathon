@@ -60,6 +60,8 @@ def test_bedrock_missing_model_is_explicit(monkeypatch):
 
 def test_settings_come_from_environment(monkeypatch):
     monkeypatch.setenv("S3_DOCUMENT_BUCKET", "env-bucket")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://localhost:4566")
     get_settings.cache_clear()
     assert get_settings().s3_document_bucket == "env-bucket"
+    assert get_settings().aws_endpoint_url == "http://localhost:4566"
     get_settings.cache_clear()

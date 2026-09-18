@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg2://regimpact:regimpact@localhost:5432/regimpact"
     aws_region: str = "us-east-1"
+    aws_endpoint_url: str = ""
     s3_document_bucket: str = "regimpact-documents"
     sqs_queue_url: str = ""
     demo_company_id: UUID | None = None

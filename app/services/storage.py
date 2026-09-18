@@ -5,17 +5,16 @@ from __future__ import annotations
 from functools import lru_cache
 from uuid import UUID
 
-import boto3
 from botocore.client import BaseClient
 from botocore.exceptions import ClientError
 
+from app.aws import client, reset_clients
 from app.config import get_settings
 
 
 @lru_cache
 def s3_client() -> BaseClient:
-    settings = get_settings()
-    return boto3.client("s3", region_name=settings.aws_region)
+    return client("s3")
 
 
 def regulation_key(document_id: UUID, filename: str) -> str:
@@ -62,3 +61,4 @@ def presigned_get_url(key: str) -> str:
 
 def reset_s3_client() -> None:
     s3_client.cache_clear()
+    reset_clients()
