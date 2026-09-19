@@ -26,13 +26,13 @@ where every point links back to the source.
 ## 3. Requirements, Constraints & Guidelines
 
 - **REQ-001**: Use a made-up payment aggregator, set up in advance.
-- **REQ-002**: Use at least one real rule document with its source link.
-- **REQ-003**: Show reading the document, applicability, impact, gaps, tasks, and sources.
-- **REQ-004**: Show the review status.
+- **REQ-002**: The RBI corpus is already indexed. Show official source URLs. Do not live-download during the five-minute talk.
+- **REQ-003**: Show profile → applicable RBI set → evidence → impact → gaps → risk → actions → sources.
+- **REQ-004**: Show a seeded regulatory update (48-hour escalation added) and that the company is affected.
 - **REQ-005**: Finish in about five minutes.
-- **REQ-006**: The demo company must already have at least two documents uploaded. Otherwise gap checking has nothing to find, and we cannot show both a requirement that is met and one that is not.
+- **REQ-006**: The demo company must already have at least two policy PDFs uploaded.
 - **CON-001**: Do not rely on downloading anything live during the demo.
-- **GUD-001**: Load the documents beforehand. Only run live what we know is reliable.
+- **GUD-001**: Seed the corpus and policies beforehand. Only run live the portfolio impact if it has been timed.
 
 ## 4. Interfaces & Data Contracts
 

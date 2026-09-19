@@ -81,6 +81,9 @@ async def upload_regulation(
         s3_key=key,
         content_hash=content_hash,
         processing_status=ProcessingStatus.QUEUED.value,
+        source_kind="uploaded",
+        lifecycle_status="active",
+        jurisdiction="India",
     )
 
     db.add(document)

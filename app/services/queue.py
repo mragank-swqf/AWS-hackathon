@@ -16,6 +16,8 @@ from app.config import get_settings
 JOB_INGEST_REGULATION = "ingest_regulation"
 JOB_INGEST_POLICY = "ingest_policy"
 JOB_RUN_ANALYSIS = "run_analysis"
+JOB_SYNC_CORPUS = "sync_corpus"
+JOB_RUN_PORTFOLIO = "run_portfolio"
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,17 @@ def enqueue_run_analysis(analysis_id: UUID, company_id: UUID) -> str:
     return enqueue_job(
         JOB_RUN_ANALYSIS,
         {"analysis_id": str(analysis_id), "company_id": str(company_id)},
+    )
+
+
+def enqueue_sync_corpus() -> str:
+    return enqueue_job(JOB_SYNC_CORPUS, {})
+
+
+def enqueue_run_portfolio(run_id: UUID, company_id: UUID) -> str:
+    return enqueue_job(
+        JOB_RUN_PORTFOLIO,
+        {"run_id": str(run_id), "company_id": str(company_id)},
     )
 
 

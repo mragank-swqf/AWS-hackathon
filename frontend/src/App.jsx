@@ -1,19 +1,22 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, setCompanyId } from "./api.js";
 
 const SCREENS = [
+  ["dashboard", "Dashboard"],
   ["profile", "Company profile"],
-  ["regulations", "Regulation library"],
-  ["evidence", "Evidence library"],
-  ["setup", "Analysis setup"],
-  ["results", "Analysis results"],
-  ["actions", "Action tracker"],
+  ["applicable", "Applicable regulations"],
+  ["updates", "Regulatory updates"],
+  ["evidence", "Company evidence"],
+  ["results", "Compliance analysis"],
+  ["actions", "Actions"],
 ];
 
 const ORG_TYPES = [
   ["payment_aggregator", "Payment aggregator"],
   ["payment_gateway", "Payment gateway"],
   ["nbfc", "NBFC"],
+  ["bank", "Bank"],
+  ["payment_bank", "Payments bank"],
   ["lending_platform", "Lending platform"],
   ["prepaid_instrument_issuer", "Prepaid instrument issuer"],
   ["account_aggregator", "Account aggregator"],
@@ -106,10 +109,27 @@ const LABELS = {
   done: "Done",
   cited_effective: "Effective date from the source",
   cited_compliance: "Compliance date from the source",
-  inferred_recommendation: "Suggested date — not a regulator deadline",
-  quick: "Quick",
-  standard: "Standard",
-  deep: "Deep",
+  added: "New",
+  modified: "Modified",
+  removed: "Removed",
+  unchanged: "Unchanged",
+  organization_type: "Organization type",
+  has_outsourced_operations: "Outsourced operations",
+  uses_customer_data: "Customer data",
+  seeded: "Indexed from official source",
+  crawled: "Downloaded from RBI",
+  uploaded: "Uploaded",
+  active: "Active",
+  superseded: "Superseded",
+  kyc_aml: "KYC / AML",
+  digital_lending: "Digital lending",
+  cybersecurity: "Cybersecurity",
+  payments: "Payments",
+  outsourcing: "Outsourcing",
+  it_governance: "IT governance",
+  customer_protection: "Customer protection",
+  data: "Data",
+  other: "Other",
 };
 
 function labelOf(value) {
@@ -154,6 +174,127 @@ function Status({ value }) {
       {labelOf(value)}
     </span>
   );
+}
+
+function SourceSheet({ title, body, url, loading, onClose }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === "Escape") onCloseRef.current();
+    }
+    window.addEventListener("keydown", onKey);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  return (
+    <div className="source-layer">
+      <button className="source-backdrop" type="button" aria-label="Close source" onClick={onClose} />
+      <div className="source-panel" role="dialog" aria-modal="true" aria-labelledby="source-title">
+        <div className="source-panel-head">
+          <h2 id="source-title">{title}</h2>
+          <button className="btn btn-secondary" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {loading && (
+          <p className="muted" role="status">
+            Loading the cited passage.
+          </p>
+        )}
+        {body && <blockquote className="excerpt">{body}</blockquote>}
+        {url && (
+          <p className="source-url">
+            <span className="muted">Official URL</span>
+            <br />
+            {url}
+          </p>
+        )}
+        {url && (
+          <div className="actions">
+            <a className="btn btn-secondary" href={url} target="_blank" rel="noreferrer">
+              Open on RBI website
+            </a>
+            <button className="btn btn-primary" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        )}
+        {!url && !loading && (
+          <div className="actions">
+            <button className="btn btn-primary" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OfficialSourceButton({ href, title }) {
+  const [open, setOpen] = useState(false);
+  if (!href) return null;
+  return (
+    <>
+      <button className="btn btn-secondary" type="button" onClick={() => setOpen(true)}>
+        Official RBI source
+      </button>
+      {open && (
+        <SourceSheet title={title || "Official RBI source"} url={href} onClose={() => setOpen(false)} />
+      )}
+    </>
+  );
+}
+
+function countBy(rows, key, fallback = "pending") {
+  const map = new Map();
+  for (const row of rows) {
+    const value = row[key] || fallback;
+    map.set(value, (map.get(value) || 0) + 1);
+  }
+  return [...map.entries()].map(([id, count]) => [id, labelOf(id), count]);
+}
+
+function FilterBar({ legend, value, onChange, options }) {
+  if (!options.length) return null;
+  return (
+    <fieldset className="filter-bar">
+      <legend>{legend}</legend>
+      <div className="filter-chips" role="group" aria-label={legend}>
+        <button
+          type="button"
+          className={`filter-chip${value === "all" ? " is-active" : ""}`}
+          aria-pressed={value === "all"}
+          onClick={() => onChange("all")}
+        >
+          All
+        </button>
+        {options.map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            className={`filter-chip${value === id ? " is-active" : ""}`}
+            aria-pressed={value === id}
+            onClick={() => onChange(id)}
+          >
+            {label}
+            <span className="filter-count">{count}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function matchesFilter(value, filter, fallback = "pending") {
+  return filter === "all" || (value || fallback) === filter;
 }
 
 function Banner({ state, emptyText, emptyAction }) {
@@ -248,9 +389,11 @@ export default function App() {
   const [screen, setScreen] = useState(() => {
     const saved = window.localStorage.getItem("regimpact_screen");
     if (SCREENS.some(([id]) => id === saved)) return saved;
-    return window.localStorage.getItem("regimpact_company_id") ? "regulations" : "profile";
+    return window.localStorage.getItem("regimpact_company_id") ? "dashboard" : "profile";
   });
-  const [navOpen, setNavOpen] = useState(true);
+  const [navOpen, setNavOpen] = useState(() =>
+    window.matchMedia("(min-width: 50.0625rem)").matches,
+  );
   const [company, setCompany] = useState(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState(
     window.localStorage.getItem("regimpact_analysis_id") || "",
@@ -302,7 +445,10 @@ export default function App() {
               className="nav-item"
               type="button"
               aria-current={screen === id ? "page" : undefined}
-              onClick={() => setScreen(id)}
+              onClick={() => {
+                setScreen(id);
+                if (window.matchMedia("(max-width: 50rem)").matches) setNavOpen(false);
+              }}
             >
               {label}
             </button>
@@ -310,13 +456,45 @@ export default function App() {
         </nav>
       </aside>
       <main id="main">
+        {screen === "dashboard" && (
+          <Dashboard
+            company={company}
+            onOpenApplicable={() => setScreen("applicable")}
+            onOpenUpdates={() => setScreen("updates")}
+            onOpenResults={(id) => {
+              rememberAnalysis(id);
+              setScreen("results");
+            }}
+            onOpenProfile={() => setScreen("profile")}
+            onOpenEvidence={() => setScreen("evidence")}
+          />
+        )}
         {screen === "profile" && (
-          <CompanyProfile company={company} onSaved={setCompany} />
+          <CompanyProfile
+            company={company}
+            onSaved={(data) => {
+              setCompany(data);
+              setScreen("dashboard");
+            }}
+          />
+        )}
+        {screen === "applicable" && (
+          <ApplicableRegulations
+            onRunImpact={(id) => {
+              rememberAnalysis(id);
+              setScreen("results");
+            }}
+            goEvidence={() => setScreen("evidence")}
+            goUpload={() => setScreen("regulations")}
+          />
+        )}
+        {screen === "updates" && (
+          <RegulatoryUpdates goAnalysis={() => setScreen("results")} />
         )}
         {screen === "regulations" && (
           <RegulationLibrary goEvidence={() => setScreen("evidence")} />
         )}
-        {screen === "evidence" && <EvidenceLibrary goSetup={() => setScreen("setup")} />}
+        {screen === "evidence" && <EvidenceLibrary goSetup={() => setScreen("applicable")} />}
         {screen === "setup" && (
           <AnalysisSetup
             onStarted={rememberAnalysis}
@@ -329,14 +507,343 @@ export default function App() {
           <AnalysisResults
             analysisId={selectedAnalysis}
             goActions={() => setScreen("actions")}
-            goSetup={() => setScreen("setup")}
+            goSetup={() => setScreen("applicable")}
           />
         )}
         {screen === "actions" && (
-          <ActionTracker analysisId={selectedAnalysis} goSetup={() => setScreen("setup")} />
+          <ActionTracker analysisId={selectedAnalysis} goSetup={() => setScreen("applicable")} />
         )}
       </main>
     </div>
+  );
+}
+
+async function waitForPortfolioAnalysis() {
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    const dash = await api.getDashboard();
+    if (dash.analysis_id && dash.requirements_assessed > 0) return dash.analysis_id;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  const dash = await api.getDashboard();
+  return dash.analysis_id;
+}
+
+function StatRow({ label, value, hint }) {
+  return (
+    <div className="stat-row">
+      <dt>{label}</dt>
+      <dd>
+        <strong>{value}</strong>
+        {hint ? <span className="muted"> {hint}</span> : null}
+      </dd>
+    </div>
+  );
+}
+
+function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, onOpenProfile, onOpenEvidence }) {
+  const [state, setState] = useAsync(() => (company ? api.getDashboard() : Promise.resolve(null)), [
+    company?.id,
+  ]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const data = state.data;
+
+  async function runImpact() {
+    setBusy(true);
+    setError("");
+    try {
+      await api.startPortfolio();
+      const analysisId = await waitForPortfolioAnalysis();
+      if (analysisId) onOpenResults(analysisId);
+      else setError("Impact is still running. Open Compliance analysis in a minute.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!company) {
+    return (
+      <section className="page">
+        <h1 className="page-title">Dashboard</h1>
+        <div className="banner empty">
+          <p>Save a company profile first. The indexed RBI corpus is matched to that profile.</p>
+          <button className="btn btn-primary" type="button" onClick={onOpenProfile}>
+            Open company profile
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="page">
+      <h1 className="page-title">Dashboard</h1>
+      <p className="lede">
+        Indexed RBI documents are already in the corpus. Upload company evidence, then run impact
+        on what actually applies. This is a working assessment, not legal advice. Local extractive
+        analysis is in use.
+      </p>
+      {error && (
+        <div className="banner error" role="alert">
+          <p>{error}</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {state.status === "loading" && (
+        <div className="banner loading" role="status">
+          Loading the corpus snapshot.
+        </div>
+      )}
+      {data && (
+        <article className="card">
+          <p className="kicker">Snapshot</p>
+          <dl className="stat-list">
+            <StatRow label="Applicable regulations" value={data.applicable} />
+            <StatRow label="Requirements assessed" value={data.requirements_assessed} />
+            <StatRow label="Fully evidenced" value={data.fully_evidenced} />
+            <StatRow label="Partly evidenced" value={data.partially_evidenced} />
+            <StatRow label="Gaps" value={data.gaps} />
+            <StatRow label="High-risk gaps" value={data.high_risk_gaps} />
+            <StatRow label="Human review required" value={data.human_review_required} />
+            <StatRow label="Active RBI documents" value={data.corpus_documents} />
+          </dl>
+          {data.assessment_confidence && (
+            <p className="muted">
+              {data.assessment_confidence.label}: {data.assessment_confidence.definition}
+            </p>
+          )}
+          {data.latest_change_summary && (
+            <div className="meta-row">
+              <p>Latest RBI update: {data.latest_change_summary}</p>
+              <button className="btn btn-secondary" type="button" onClick={onOpenUpdates}>
+                Open updates
+              </button>
+            </div>
+          )}
+          <div className="actions">
+            <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
+              {busy ? "Queuing impact…" : "Run impact on applicable regulations"}
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={onOpenApplicable}>
+              Review applicability
+            </button>
+            <button className="btn btn-secondary" type="button" onClick={onOpenEvidence}>
+              Upload company evidence
+            </button>
+          </div>
+        </article>
+      )}
+    </section>
+  );
+}
+
+function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
+  const [state, setState] = useAsync(() => api.getApplicable(), []);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [decision, setDecision] = useState("all");
+  const [domain, setDomain] = useState("all");
+  const [review, setReview] = useState("all");
+  const rows = state.data || [];
+  const visible = rows.filter(
+    (row) =>
+      matchesFilter(row.applicability, decision) &&
+      matchesFilter(row.regulatory_domain, domain, "other") &&
+      (review === "all" ||
+        (review === "needs_review" && row.human_review_required) ||
+        (review === "decided" && !row.human_review_required)),
+  );
+
+  async function runImpact() {
+    setBusy(true);
+    setError("");
+    try {
+      await api.startPortfolio();
+      const analysisId = await waitForPortfolioAnalysis();
+      if (analysisId) onRunImpact(analysisId);
+      else setError("Impact is still running. Open Compliance analysis in a minute.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="page">
+      <h1 className="page-title">Applicable regulations</h1>
+      <p className="lede">
+        Applicability is decided from the company profile and RBI metadata first. Uncertain rows
+        need a person — they are not treated as in scope.
+      </p>
+      {error && (
+        <div className="banner error" role="alert">
+          <p>{error}</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      <Banner
+        state={state}
+        emptyText="No indexed RBI documents yet. The worker seeds the corpus in the background."
+      />
+      <div className="actions">
+        <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
+          {busy ? "Queuing…" : "Run impact on applicable set"}
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={goEvidence}>
+          Upload company evidence
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={goUpload}>
+          Upload another circular
+        </button>
+      </div>
+      {rows.length > 0 && (
+        <div className="filter-stack">
+          <FilterBar
+            legend="Decision"
+            value={decision}
+            onChange={setDecision}
+            options={countBy(rows, "applicability")}
+          />
+          <FilterBar
+            legend="Domain"
+            value={domain}
+            onChange={setDomain}
+            options={countBy(rows, "regulatory_domain", "other")}
+          />
+          <FilterBar
+            legend="Review"
+            value={review}
+            onChange={setReview}
+            options={[
+              [
+                "needs_review",
+                "Needs a person",
+                rows.filter((row) => row.human_review_required).length,
+              ],
+              [
+                "decided",
+                "Decided",
+                rows.filter((row) => !row.human_review_required).length,
+              ],
+            ].filter(([, , count]) => count > 0)}
+          />
+          <p className="muted">
+            Showing {visible.length} of {rows.length}
+          </p>
+        </div>
+      )}
+      {rows.length > 0 && visible.length === 0 && (
+        <div className="banner empty">
+          <p>No documents match these filters.</p>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => {
+              setDecision("all");
+              setDomain("all");
+              setReview("all");
+            }}
+          >
+            Show all
+          </button>
+        </div>
+      )}
+      {visible.map((row) => (
+        <article className="card result-card" key={row.id}>
+          <div className="clause-rail">{labelOf(row.applicability)}</div>
+          <div>
+            <h2>{row.title}</h2>
+            <dl className="dl">
+              <dt>Decision</dt>
+              <dd>
+                <Status value={row.applicability} />
+              </dd>
+              <dt>Reason</dt>
+              <dd>{row.reason}</dd>
+              <dt>Company characteristics</dt>
+              <dd>
+                {(row.matched_characteristics || []).map(labelOf).join(", ") || "None"}
+              </dd>
+              <dt>Domain</dt>
+              <dd>{labelOf(row.regulatory_domain)}</dd>
+            </dl>
+            {row.source_url && (
+              <div className="actions">
+                <OfficialSourceButton href={row.source_url} title={row.title} />
+              </div>
+            )}
+            {row.human_review_required && (
+              <p className="muted">A person must review this applicability decision.</p>
+            )}
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function RegulatoryUpdates({ goAnalysis }) {
+  const [state] = useAsync(() => api.getChanges(), []);
+  const [kind, setKind] = useState("all");
+  const changes = state.data || [];
+  const clauseOptions = countBy(
+    changes.flatMap((change) => change.requirement_changes || []),
+    "kind",
+  );
+  const visible = changes
+    .map((change) => ({
+      ...change,
+      requirement_changes: (change.requirement_changes || []).filter((item) =>
+        matchesFilter(item.kind, kind),
+      ),
+    }))
+    .filter((change) => kind === "all" || change.requirement_changes.length > 0);
+  return (
+    <section className="page">
+      <h1 className="page-title">Regulatory updates</h1>
+      <p className="lede">
+        A requirement is marked changed only when the clause text itself changed between versions.
+      </p>
+      <Banner state={state} emptyText="No version changes in the indexed corpus yet." />
+      {changes.length > 0 && (
+        <div className="filter-stack">
+          <FilterBar legend="Change" value={kind} onChange={setKind} options={clauseOptions} />
+        </div>
+      )}
+      {visible.map((change) => (
+        <article className="card" key={change.id}>
+          <p className="kicker">RBI regulatory update</p>
+          <h2>{change.title}</h2>
+          <p>{change.summary}</p>
+          {change.source_url && (
+            <div className="actions">
+              <OfficialSourceButton href={change.source_url} title={change.title} />
+            </div>
+          )}
+          {(change.requirement_changes || []).map((item) => (
+            <div className="card nested" key={item.id}>
+              <p>
+                <Status value={item.kind} /> {item.clause_number ? `Clause ${item.clause_number}` : ""}
+              </p>
+              {item.previous_text && <p className="muted">Was: {item.previous_text}</p>}
+              {item.new_text && <p>Now: {item.new_text}</p>}
+            </div>
+          ))}
+          <div className="actions">
+            <button className="btn btn-secondary" type="button" onClick={goAnalysis}>
+              Open compliance analysis
+            </button>
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }
 
@@ -418,11 +925,20 @@ function CompanyProfile({ company, onSaved }) {
     <section className="page">
       <h1 className="page-title">Company profile</h1>
       <p className="lede">
-        There is no sign-in. Save the demo company here; every other screen uses it.
+        Save the entity type and operating facts here. Indexed RBI documents are matched to this
+        profile. Company policy names listed below are not evidence — upload the PDFs on Company
+        evidence.
       </p>
       {state.status === "error" && (
         <div className="banner error" role="alert">
-          {state.message}
+          <p>{state.message}</p>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => setState({ status: "ready", message: "" })}
+          >
+            Dismiss
+          </button>
         </div>
       )}
       {state.message && state.status === "ready" && (
@@ -631,7 +1147,10 @@ function RegulationLibrary({ goEvidence }) {
         </div>
         {error && (
           <div className="banner error" role="alert">
-            {error}
+            <p>{error}</p>
+            <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+              Dismiss
+            </button>
           </div>
         )}
       </form>
@@ -750,7 +1269,10 @@ function EvidenceLibrary({ goSetup }) {
         </div>
         {error && (
           <div className="banner error" role="alert">
-            {error}
+            <p>{error}</p>
+            <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+              Dismiss
+            </button>
           </div>
         )}
       </form>
@@ -927,7 +1449,18 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState(analysisId ? "loading" : "empty");
   const [confirmReject, setConfirmReject] = useState(false);
+  const [coverage, setCoverage] = useState("all");
+  const [risk, setRisk] = useState("all");
   const confirmId = useId();
+
+  useEffect(() => {
+    if (!confirmReject) return undefined;
+    function onKey(event) {
+      if (event.key === "Escape") setConfirmReject(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmReject]);
 
   useEffect(() => {
     if (!analysisId) {
@@ -981,23 +1514,34 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
     }
   }
 
+  function closeCitation() {
+    setOpenCitationId(null);
+    setCitation(null);
+  }
+
   async function openCitation(id) {
+    if (openCitationId === id) {
+      closeCitation();
+      return;
+    }
+    setOpenCitationId(id);
+    setCitation(null);
     try {
-      setOpenCitationId(id);
       setCitation(await api.getCitation(id));
     } catch (err) {
       setError(err.message);
+      closeCitation();
     }
   }
 
   if (status === "empty") {
     return (
       <section className="page">
-        <h1 className="page-title">Analysis results</h1>
+        <h1 className="page-title">Compliance analysis</h1>
         <div className="banner empty">
-          <p>Start an analysis to see results here.</p>
+          <p>Run impact from the dashboard after the RBI corpus is indexed.</p>
           <button className="btn btn-primary" type="button" onClick={goSetup}>
-            Open analysis setup
+            Open applicable regulations
           </button>
         </div>
       </section>
@@ -1006,7 +1550,7 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   if (status === "loading") {
     return (
       <section className="page">
-        <h1 className="page-title">Analysis results</h1>
+        <h1 className="page-title">Compliance analysis</h1>
         <div className="banner loading" role="status">
           Waiting for the analysis.
         </div>
@@ -1016,7 +1560,7 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   if (status === "error" && !analysis) {
     return (
       <section className="page">
-        <h1 className="page-title">Analysis results</h1>
+        <h1 className="page-title">Compliance analysis</h1>
         <div className="banner error" role="alert">
           {error}
         </div>
@@ -1028,17 +1572,30 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   const requirements = result.requirements || [];
   const currentStep = result.current_step || analysis.status;
   const working = analysis.status !== "completed" && analysis.status !== "failed";
+  const visibleRequirements = requirements.filter(
+    (item) =>
+      matchesFilter(item.gap_status, coverage) &&
+      matchesFilter(item.severity || analysis.overall_risk, risk, "none"),
+  );
+  const visibleGaps = gaps.filter(
+    (gap) =>
+      matchesFilter(gap.gap_status, coverage) &&
+      matchesFilter(gap.severity, risk, "none"),
+  );
 
   return (
     <section className="page">
-      <h1 className="page-title">Analysis results</h1>
+      <h1 className="page-title">Compliance analysis</h1>
       <p className="lede">
         This is a working analysis, not legal advice. Cited dates come from the circular.
         Suggested dates are never shown as regulator deadlines.
       </p>
       {error && (
         <div className="banner error" role="alert">
-          {error}
+          <p>{error}</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+            Dismiss
+          </button>
         </div>
       )}
       {result.failed_step && (
@@ -1095,7 +1652,47 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
       {requirements.length === 0 && working && (
         <div className="banner empty">Requirements appear here when the current step finishes.</div>
       )}
-      {requirements.map((item, index) => {
+      {requirements.length > 0 && (
+        <div className="filter-stack">
+          <FilterBar
+            legend="Coverage"
+            value={coverage}
+            onChange={setCoverage}
+            options={countBy(requirements, "gap_status")}
+          />
+          <FilterBar
+            legend="Risk"
+            value={risk}
+            onChange={setRisk}
+            options={countBy(
+              requirements.map((item) => ({
+                severity: item.severity || analysis.overall_risk || "none",
+              })),
+              "severity",
+              "none",
+            )}
+          />
+          <p className="muted">
+            Showing {visibleRequirements.length} of {requirements.length}
+          </p>
+        </div>
+      )}
+      {requirements.length > 0 && visibleRequirements.length === 0 && (
+        <div className="banner empty">
+          <p>No requirements match these filters.</p>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={() => {
+              setCoverage("all");
+              setRisk("all");
+            }}
+          >
+            Show all
+          </button>
+        </div>
+      )}
+      {visibleRequirements.map((item, index) => {
         const citationId = item.citation_id;
         return (
           <article className="card result-card" key={item.id || item.requirement || index}>
@@ -1138,27 +1735,19 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
                   <button
                     className="btn btn-secondary"
                     type="button"
+                    aria-expanded={openCitationId === citationId}
                     onClick={() => openCitation(citationId)}
                   >
-                    Open source…
+                    {openCitationId === citationId ? "Hide source" : "Open source"}
                   </button>
                 </div>
-              )}
-              {citation && openCitationId === citationId && (
-                <blockquote className="excerpt">
-                  <p>{citation.excerpt}</p>
-                  <footer>
-                    Pages {citation.page_start}
-                    {citation.page_end !== citation.page_start ? `–${citation.page_end}` : ""} ·
-                    Clause {citation.clause_number || "n/a"}
-                  </footer>
-                </blockquote>
               )}
             </div>
           </article>
         );
       })}
-      {gaps.map((gap) => (
+      {requirements.length === 0 &&
+        visibleGaps.map((gap) => (
         <article className="card result-card" key={gap.id}>
           <div className="clause-rail">Gap</div>
           <div>
@@ -1177,6 +1766,25 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
           </div>
         </article>
       ))}
+      {openCitationId && (
+        <SourceSheet
+          title="Cited passage"
+          loading={!citation}
+          body={
+            citation ? (
+              <>
+                <p>{citation.excerpt}</p>
+                <footer>
+                  Pages {citation.page_start}
+                  {citation.page_end !== citation.page_start ? `–${citation.page_end}` : ""} ·
+                  Clause {citation.clause_number || "n/a"}
+                </footer>
+              </>
+            ) : null
+          }
+          onClose={closeCitation}
+        />
+      )}
     </section>
   );
 }
@@ -1187,6 +1795,9 @@ function ActionTracker({ analysisId, goSetup }) {
     [analysisId],
   );
   const [error, setError] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const rows = state.data || [];
+  const visible = rows.filter((item) => matchesFilter(item.status, statusFilter, "open"));
 
   async function changeStatus(id, status) {
     try {
@@ -1217,11 +1828,32 @@ function ActionTracker({ analysisId, goSetup }) {
       <p className="lede">Tasks that come out of the report. Change status as work moves.</p>
       {error && (
         <div className="banner error" role="alert">
-          {error}
+          <p>{error}</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setError("")}>
+            Dismiss
+          </button>
         </div>
       )}
       <Banner state={state} emptyText="No tasks yet. Finish an analysis first." />
-      {state.status === "ready" && (
+      {rows.length > 0 && (
+        <div className="filter-stack">
+          <FilterBar
+            legend="Status"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={countBy(rows, "status", "open")}
+          />
+        </div>
+      )}
+      {state.status === "ready" && visible.length === 0 && rows.length > 0 && (
+        <div className="banner empty">
+          <p>No tasks match this status.</p>
+          <button className="btn btn-secondary" type="button" onClick={() => setStatusFilter("all")}>
+            Show all
+          </button>
+        </div>
+      )}
+      {state.status === "ready" && visible.length > 0 && (
         <div className="table-wrap">
           <table>
             <caption>Tasks for this analysis</caption>
@@ -1233,7 +1865,7 @@ function ActionTracker({ analysisId, goSetup }) {
               </tr>
             </thead>
             <tbody>
-              {state.data.map((item) => (
+              {visible.map((item) => (
                 <tr key={item.id}>
                   <td>{item.title}</td>
                   <td>{item.owner_department || "Unassigned"}</td>

@@ -104,6 +104,13 @@ class RegulationRead(BaseModel):
     content_hash: str
     pages: int | None
     processing_status: str
+    jurisdiction: str | None = None
+    regulatory_domain: str | None = None
+    applicable_entity_types: list[str] | None = None
+    lifecycle_status: str = "active"
+    version_label: str | None = None
+    corpus_key: str | None = None
+    source_kind: str = "uploaded"
     created_at: datetime
 
 
@@ -216,3 +223,71 @@ class SourceLinkRead(BaseModel):
 
 class ReviewDecision(ForbiddenExtraModel):
     comment: str | None = None
+
+
+class ApplicabilityRead(BaseModel):
+    id: UUID
+    regulation_id: UUID
+    title: str
+    regulator: str
+    document_type: str
+    regulatory_domain: str | None
+    source_url: str | None
+    lifecycle_status: str
+    applicability: str
+    reason: str
+    matched_characteristics: list[str]
+    rule_id: str | None
+    human_review_required: bool
+    processing_status: str
+
+
+class RequirementChangeRead(BaseModel):
+    id: UUID
+    kind: str
+    clause_number: str | None
+    previous_text: str | None
+    new_text: str | None
+
+
+class RegulatoryChangeRead(BaseModel):
+    id: UUID
+    corpus_key: str
+    change_kind: str
+    summary: str
+    title: str
+    source_url: str | None
+    previous_document_id: UUID | None
+    new_document_id: UUID
+    created_at: datetime
+    requirement_changes: list[RequirementChangeRead]
+
+
+class PortfolioRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    company_id: UUID
+    status: str
+    overall_risk: str | None
+    human_review_required: bool
+    result: dict[str, Any] | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
+class DashboardRead(BaseModel):
+    applicable: int
+    requirements_assessed: int
+    fully_evidenced: int
+    partially_evidenced: int
+    gaps: int
+    high_risk_gaps: int
+    human_review_required: int
+    overall_risk: str | None
+    corpus_documents: int
+    latest_change_summary: str | None
+    assessment_confidence: dict[str, Any]
+    portfolio_run_id: UUID | None
+    analysis_id: UUID | None
+    ingest_status: str | None

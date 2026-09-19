@@ -1,8 +1,8 @@
 ---
 title: RegImpact Frontend and User Experience Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
-last_updated: 2026-09-17
+last_updated: 2026-09-19
 owner: RegImpact Team
 tags: [design, frontend, ux, app]
 ---
@@ -11,10 +11,15 @@ tags: [design, frontend, ux, app]
 
 This spec lists the screens, how a user moves between them, and how we show the results.
 
+The primary path is dashboard → company profile → applicable RBI regulations → regulatory
+updates → company evidence → compliance analysis → actions. Regulation upload remains as a
+secondary path. Copy follows Apple HIG writing: sentence case for headlines, verbs on buttons,
+no "91% confidence" language — use "assessment confidence" as an evidence-quality indicator.
+
 ## 1. Purpose & Scope
 
-The web app lets a user fill in their company details, upload documents, run an analysis, read
-the sources, and track the tasks that come out of it.
+The web app lets a user describe the company, see which indexed RBI documents apply, upload
+internal evidence, run a portfolio impact, read sources, and track tasks.
 
 ## 2. Definitions
 
@@ -26,7 +31,7 @@ the sources, and track the tasks that come out of it.
 ## 3. Requirements, Constraints & Guidelines
 
 - **REQ-001**: There is no login screen. The app opens straight onto the demo company.
-- **REQ-002**: The rule library lets a user upload and see a list.
+- **REQ-002**: The applicable-regulations screen lists indexed RBI documents with a structured decision. Regulation upload is secondary.
 - **REQ-003**: The evidence library lets a user upload company documents, and shows how far each one got.
 - **REQ-004**: The analysis screen shows applicability, requirements, who is affected, gaps, risk, tasks, and sources.
 - **REQ-005**: A reviewer can approve or reject.

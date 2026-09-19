@@ -70,10 +70,30 @@ class RegulatoryDocument(Base):
     content_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     pages: Mapped[int | None] = mapped_column(Integer)
     processing_status: Mapped[str] = mapped_column(Text, nullable=False)
+    jurisdiction: Mapped[str | None] = mapped_column(Text)
+    regulatory_domain: Mapped[str | None] = mapped_column(Text)
+    applicable_entity_types: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    lifecycle_status: Mapped[str] = mapped_column(
+        Text, nullable=False, default="active", server_default=text("'active'")
+    )
+    version_label: Mapped[str | None] = mapped_column(Text)
+    corpus_key: Mapped[str | None] = mapped_column(Text)
+    source_kind: Mapped[str] = mapped_column(
+        Text, nullable=False, default="uploaded", server_default=text("'uploaded'")
+    )
+    supersedes_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regulatory_documents.id")
+    )
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     chunks: Mapped[list[DocumentChunk]] = relationship(back_populates="regulatory_document")
     analyses: Mapped[list[ImpactAnalysis]] = relationship(back_populates="regulation")
+    supersedes: Mapped[RegulatoryDocument | None] = relationship(
+        remote_side="RegulatoryDocument.id",
+        foreign_keys=[supersedes_document_id],
+    )
 
 
 class CompanyPolicy(Base):
@@ -153,6 +173,9 @@ class ImpactAnalysis(Base):
     regulation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("regulatory_documents.id"), nullable=False
     )
+    portfolio_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("portfolio_runs.id", ondelete="SET NULL")
+    )
     status: Mapped[str] = mapped_column(Text, nullable=False)
     applicability: Mapped[str | None] = mapped_column(Text)
     overall_risk: Mapped[str | None] = mapped_column(Text)
@@ -171,6 +194,7 @@ class ImpactAnalysis(Base):
     citations: Mapped[list[Citation]] = relationship(back_populates="analysis")
     review: Mapped[Review | None] = relationship(back_populates="analysis")
     actions: Mapped[list[ActionItem]] = relationship(back_populates="analysis")
+    portfolio_run: Mapped[PortfolioRun | None] = relationship(back_populates="analyses")
 
 
 class RegulatoryRequirement(Base):
@@ -283,3 +307,92 @@ class Review(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     analysis: Mapped[ImpactAnalysis] = relationship(back_populates="review")
+
+
+class PortfolioRun(Base):
+    __tablename__ = "portfolio_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    overall_risk: Mapped[str | None] = mapped_column(Text)
+    human_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    result: Mapped[dict | None] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    analyses: Mapped[list[ImpactAnalysis]] = relationship(back_populates="portfolio_run")
+
+
+class RegulationApplicability(Base):
+    __tablename__ = "regulation_applicability"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    regulation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regulatory_documents.id", ondelete="CASCADE"), nullable=False
+    )
+    applicability: Mapped[str] = mapped_column(Text, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    matched_characteristics: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    rule_id: Mapped[str | None] = mapped_column(Text)
+    human_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    regulation: Mapped[RegulatoryDocument] = relationship()
+
+
+class RegulatoryChange(Base):
+    __tablename__ = "regulatory_changes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    corpus_key: Mapped[str] = mapped_column(Text, nullable=False)
+    previous_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regulatory_documents.id")
+    )
+    new_document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regulatory_documents.id"), nullable=False
+    )
+    change_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    previous_document: Mapped[RegulatoryDocument | None] = relationship(
+        foreign_keys=[previous_document_id]
+    )
+    new_document: Mapped[RegulatoryDocument] = relationship(foreign_keys=[new_document_id])
+    requirement_changes: Mapped[list[RequirementChange]] = relationship(back_populates="change")
+
+
+class RequirementChange(Base):
+    __tablename__ = "requirement_changes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    change_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("regulatory_changes.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    clause_number: Mapped[str | None] = mapped_column(Text)
+    previous_text: Mapped[str | None] = mapped_column(Text)
+    new_text: Mapped[str | None] = mapped_column(Text)
+
+    change: Mapped[RegulatoryChange] = relationship(back_populates="requirement_changes")
+
+
+class CorpusIngestRun(Base):
+    __tablename__ = "corpus_ingest_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    regulator: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    created_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    updated_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)

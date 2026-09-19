@@ -11,6 +11,7 @@ from app.api.analyses import router as analyses_router
 from app.api.companies import router as companies_router
 from app.api.errors import register_error_handlers
 from app.api.health import router as health_router
+from app.api.intelligence import router as intelligence_router
 from app.api.policies import router as policies_router
 from app.api.regulations import router as regulations_router
 from app.config import get_settings
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(regulations_router)
     app.include_router(policies_router)
     app.include_router(analyses_router)
+    app.include_router(intelligence_router)
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):

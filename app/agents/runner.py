@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import UTC, date, datetime
 from typing import Any
@@ -10,6 +11,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.agents.contracts import (
     ActionPlanOutput,
@@ -85,12 +87,20 @@ def _hits_text(hits: list[SearchHit]) -> str:
 
 
 def _ensure_result(analysis: ImpactAnalysis) -> dict[str, Any]:
-    if not isinstance(analysis.result, dict):
-        analysis.result = {}
-    analysis.result.setdefault("steps", {})
-    analysis.result.setdefault("search_log", [])
-    analysis.result.setdefault("requirements", [])
-    return analysis.result
+    current = analysis.result if isinstance(analysis.result, dict) else {}
+    result = dict(current)
+    result["steps"] = dict(result.get("steps") or {})
+    result["search_log"] = list(result.get("search_log") or [])
+    result["requirements"] = list(result.get("requirements") or [])
+    analysis.result = result
+    return result
+
+
+def _store_result(session: Session, analysis: ImpactAnalysis, result: dict[str, Any]) -> None:
+    analysis.result = dict(result)
+    flag_modified(analysis, "result")
+    session.add(analysis)
+    session.flush()
 
 
 def _step_done(analysis: ImpactAnalysis, name: str) -> bool:
@@ -102,8 +112,7 @@ def _save_step(session: Session, analysis: ImpactAnalysis, name: str, payload: d
     result = _ensure_result(analysis)
     result["current_step"] = name
     result["steps"][name] = payload
-    analysis.result = dict(result)
-    session.flush()
+    _store_result(session, analysis, result)
 
 
 def _log_search(analysis: ImpactAnalysis, query: str, hits: list[SearchHit]) -> None:
@@ -115,6 +124,8 @@ def _log_search(analysis: ImpactAnalysis, query: str, hits: list[SearchHit]) -> 
             "scores": [hit.score for hit in hits],
         }
     )
+    analysis.result = dict(result)
+    flag_modified(analysis, "result")
 
 
 def _mean_search_score(analysis: ImpactAnalysis) -> float:
@@ -153,7 +164,7 @@ def run_analysis(
     analysis.status = AnalysisStatus.PROCESSING.value
     result = _ensure_result(analysis)
     result["failed_step"] = None
-    session.flush()
+    _store_result(session, analysis, result)
 
     depth = AnalysisDepth(analysis.analysis_depth)
     limit = ANALYSIS_DEPTH_CHUNK_LIMIT[depth]
@@ -182,7 +193,7 @@ def run_analysis(
         result["failed_step"] = result.get("current_step")
         analysis.status = AnalysisStatus.FAILED.value
         analysis.human_review_required = True
-        session.flush()
+        _store_result(session, analysis, result)
         raise
 
 
@@ -289,7 +300,8 @@ def _run_steps(
         for req in stored_reqs:
             hits = search(req.requirement_text, **policy_filters)
             prompt = build_prompt(
-                "Compare the requirement to company document chunks only. "
+                "Compare this requirement to company document chunks only. "
+                f"Requirement: {req.requirement_text} "
                 "compliant or partial needs evidence_chunk_ids from those chunks. "
                 "Typed profile lists are not evidence.",
                 str(GAP_SCHEMA),
@@ -344,7 +356,8 @@ def _run_steps(
         plans = []
         for req in stored_reqs:
             prompt = build_prompt(
-                "Propose tasks to close the gap. Any date you invent must use date_basis inferred_recommendation.",
+                "Propose tasks to close the gap. Any date you invent must use date_basis inferred_recommendation. "
+                f"Requirement: {req.requirement_text}",
                 str(ACTION_SCHEMA),
                 {"departments": [req.affected_departments]},
                 req.requirement_text,
@@ -594,6 +607,14 @@ def _finalize(session: Session, analysis: ImpactAnalysis, counters: dict[str, An
     impact_by_req = {
         item["requirement_id"]: item for item in (result["steps"].get("impact", {}).get("output") or [])
     }
+    originals = {
+        item.get("requirement_text"): item
+        for item in (result.get("steps") or {})
+        .get("requirements", {})
+        .get("output", {})
+        .get("requirements")
+        or []
+    }
     cards = []
     for req in reqs:
         gap = gap_by_req.get(str(req.id)) or {}
@@ -601,10 +622,17 @@ def _finalize(session: Session, analysis: ImpactAnalysis, counters: dict[str, An
         plan = plan_by_req.get(str(req.id)) or {}
         impact = impact_by_req.get(str(req.id)) or {}
         action_title = (plan.get("actions") or [{}])[0].get("title")
+        original = originals.get(req.requirement_text) or {}
+        clause = original.get("clause_number")
+        if not clause:
+            match = re.match(r"^(\d+\.\d+)\s+", req.requirement_text or "")
+            clause = match.group(1) if match else None
         cards.append(
             {
                 "id": str(req.id),
                 "requirement_text": req.requirement_text,
+                "clause_number": clause,
+                "stated_dates": original.get("stated_dates") or [],
                 "obligation_type": req.obligation_type,
                 "applicability": req.applicability,
                 "impact_level": req.impact_level or impact.get("impact_level"),
@@ -620,7 +648,6 @@ def _finalize(session: Session, analysis: ImpactAnalysis, counters: dict[str, An
         )
     result["requirements"] = cards
     result["current_step"] = "completed"
-    analysis.result = dict(result)
     analysis.status = AnalysisStatus.COMPLETED.value
     analysis.completed_at = datetime.now(UTC).replace(tzinfo=None)
-    session.flush()
+    _store_result(session, analysis, result)

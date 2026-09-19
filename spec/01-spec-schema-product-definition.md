@@ -1,37 +1,43 @@
 ---
 title: RegImpact Product Definition Specification
-version: 1.2
+version: 1.3
 date_created: 2026-09-17
-last_updated: 2026-09-17
+last_updated: 2026-09-19
 owner: RegImpact Team
-tags: [schema, product, fintech, compliance, ai]
+tags: [schema, product, fintech, compliance, ai, rbi]
 ---
 
 # Introduction
 
-This spec says what RegImpact does and who it is for. RegImpact is an AI tool that reads new
-rules from regulators and tells an Indian fintech or NBFC what it has to do about them.
+RegImpact is an RBI-first regulatory intelligence and compliance-impact engine. It automatically
+connects official RBI publications to a company's policies, evidence, risks, and remediation
+actions. The reasoning engine stays regulator-agnostic so a later SEBI or IRDAI pack can plug in.
+
+It is not positioned as "the first RBI compliance product." The point of view is: the user should
+not hunt for circulars. The corpus is maintained from official RBI sources; the user's job is to
+provide company context and internal evidence.
 
 ## 1. Purpose & Scope
 
-RegImpact turns a rule document into a report. The report says what the company must do, and it
-backs up every point with a link to the exact place in the source document.
+RegImpact maintains an indexed RBI regulatory corpus (discover, download, version, chunk, embed).
+A company profile plus structured applicability rules decide which documents apply. The existing
+seven-step compliance pipeline then runs against those documents and the company's uploaded
+evidence.
 
-The MVP is for Indian fintechs, NBFCs, payment companies, and lending platforms. The people who
-use it work in compliance, legal, risk, operations, product, and engineering.
+The MVP is for Indian fintechs, NBFCs, payment aggregators, banks, and lending platforms.
 
 The MVP must do all of this:
 
-- Let a user upload a rule document.
-- Let a user describe their company.
-- Work out if the rule applies to that company.
-- Pull out the list of things the rule asks for.
-- Say which teams are affected.
-- Find the gaps between the rule and what the company already has.
-- Say how risky each gap is.
-- Show the source for every point.
-- Suggest a list of tasks to fix the gaps.
-- Let a person check and approve the report.
+- Let a user create a company profile with a regulated entity type.
+- Maintain an RBI corpus from official sources, with a seeded pack so the demo does not depend on
+  live downloads.
+- Decide applicable / not applicable / uncertain without treating uncertain as applicable.
+- Still allow a secondary upload of a regulatory PDF.
+- Extract requirements, find evidence-backed gaps, score risk, and propose actions.
+- Detect version changes between RBI documents and show added / modified / removed clauses.
+- Let a person review uncertain applicability and high-risk conclusions.
+
+Manual regulation upload is no longer the main path.
 
 ## 2. Definitions
 

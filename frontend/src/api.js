@@ -66,4 +66,10 @@ export const api = {
   getCitationSource: (id) => request(`/api/v1/citations/${id}/source`),
   approve: (id) => request(`/api/v1/analyses/${id}/approve`, { method: "POST", body: "{}" }),
   reject: (id) => request(`/api/v1/analyses/${id}/reject`, { method: "POST", body: "{}" }),
+  getDashboard: () => request("/api/v1/intelligence/dashboard"),
+  getApplicable: () => request("/api/v1/intelligence/applicable"),
+  getChanges: () => request("/api/v1/intelligence/changes"),
+  getCorpus: () => request("/api/v1/intelligence/corpus"),
+  syncCorpus: () => request("/api/v1/intelligence/sync", { method: "POST", body: "{}" }),
+  startPortfolio: () => request("/api/v1/intelligence/portfolio", { method: "POST", body: "{}" }),
 };

@@ -13,6 +13,8 @@ class OrganizationType(StrEnum):
     PAYMENT_AGGREGATOR = "payment_aggregator"
     PAYMENT_GATEWAY = "payment_gateway"
     NBFC = "nbfc"
+    BANK = "bank"
+    PAYMENT_BANK = "payment_bank"
     LENDING_PLATFORM = "lending_platform"
     PREPAID_INSTRUMENT_ISSUER = "prepaid_instrument_issuer"
     ACCOUNT_AGGREGATOR = "account_aggregator"
@@ -145,6 +147,38 @@ class Effort(StrEnum):
     HIGH = "high"
 
 
+class LifecycleStatus(StrEnum):
+    ACTIVE = "active"
+    SUPERSEDED = "superseded"
+    INACTIVE = "inactive"
+    WITHDRAWN = "withdrawn"
+
+
+class SourceKind(StrEnum):
+    SEEDED = "seeded"
+    CRAWLED = "crawled"
+    UPLOADED = "uploaded"
+
+
+class RegulatoryDomain(StrEnum):
+    KYC_AML = "kyc_aml"
+    DIGITAL_LENDING = "digital_lending"
+    CYBERSECURITY = "cybersecurity"
+    PAYMENTS = "payments"
+    OUTSOURCING = "outsourcing"
+    IT_GOVERNANCE = "it_governance"
+    CUSTOMER_PROTECTION = "customer_protection"
+    DATA = "data"
+    OTHER = "other"
+
+
+class RequirementChangeKind(StrEnum):
+    ADDED = "added"
+    MODIFIED = "modified"
+    REMOVED = "removed"
+    UNCHANGED = "unchanged"
+
+
 class Department(StrEnum):
     COMPLIANCE = "Compliance"
     LEGAL = "Legal"
@@ -194,6 +228,10 @@ ALL_ENUMS: tuple[type[StrEnum], ...] = (
     DeadlineProximity,
     Effort,
     Department,
+    LifecycleStatus,
+    SourceKind,
+    RegulatoryDomain,
+    RequirementChangeKind,
 )
 
 

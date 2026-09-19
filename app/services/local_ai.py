@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import date
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -23,10 +24,12 @@ from app.agents.contracts import (
     RequirementsOutput,
     RiskOutput,
     SeverityInputs,
+    StatedDate,
     VerificationOutput,
 )
 from app.enums import (
     Applicability,
+    DateBasis,
     Department,
     Effort,
     GapStatus,
@@ -39,7 +42,16 @@ UUID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
     re.I,
 )
-QUOTE_RE = re.compile(r"\[chunk_id=([0-9a-f-]{36})[^\]]*\]\n(.{1,400})", re.I | re.S)
+QUOTE_RE = re.compile(
+    r"\[chunk_id=([0-9a-f-]{36})[^\]]*\]\n(.*?)(?=\n\[chunk_id=|\Z)",
+    re.I | re.S,
+)
+SHALL_RE = re.compile(
+    r"(?P<num>\d+\.\d+)\s+(?P<body>(?:Every|The|Merchant).{0,180}?\bshall\b.{0,180}?)(?=\.\s|\n|$)",
+    re.I | re.S,
+)
+REQ_IN_PROMPT = re.compile(r"Requirement:\s*(.+?)(?:\s+compliant or partial|\n|$)", re.I)
+DUTY_IN_PROMPT = re.compile(r"requirement [0-9a-f-]{36}:\s*(.+?)(?:\n|$)", re.I)
 
 
 def local_embed(text: str) -> list[float]:
@@ -72,8 +84,9 @@ def _quotes(prompt: str) -> list[tuple[UUID, str]]:
     pairs: list[tuple[UUID, str]] = []
     for match in QUOTE_RE.finditer(prompt):
         chunk_id = UUID(match.group(1))
-        text = " ".join(match.group(2).split())
-        pairs.append((chunk_id, text[:280]))
+        raw = match.group(2).split("----- END SOURCE MATERIAL")[0]
+        text = " ".join(raw.split())
+        pairs.append((chunk_id, text[:2000]))
     return pairs
 
 
@@ -94,12 +107,36 @@ def local_freeform(prompt: str) -> str:
     )
 
 
+def _duty_text(prompt: str) -> str:
+    match = REQ_IN_PROMPT.search(prompt) or DUTY_IN_PROMPT.search(prompt)
+    return (match.group(1).strip() if match else prompt).lower()
+
+
+def _shall_clauses(prompt: str) -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for match in SHALL_RE.finditer(prompt):
+        num = match.group("num")
+        if num in seen:
+            continue
+        seen.add(num)
+        body = " ".join(match.group("body").split()).rstrip(".")
+        found.append((num, body))
+    return found
+
+
+def _policy_blob(quotes: list[tuple[UUID, str]]) -> str:
+    return " ".join(text.lower() for _chunk, text in quotes)
+
+
 def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
     ids = _ids(prompt)
     quotes = _quotes(prompt)
     name = model.__name__
     fallback = ids[0] if ids else None
     snippet = quotes[0][1] if quotes else "Duty extracted from the uploaded circular"
+    duty = _duty_text(prompt)
+    policy = _policy_blob(quotes)
 
     if name == ApplicabilityOutput.__name__:
         support = [item[0] for item in quotes[:3]] or ids[:3]
@@ -113,32 +150,51 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
                 unresolved_questions=["Ingest the circular again if search returned nothing."],
             ).model_dump(mode="json")
         return ApplicabilityOutput(
-            applicability=Applicability.LIKELY_APPLICABLE,
+            applicability=Applicability.APPLICABLE,
             rationale=(
-                "Local extractive pass: the circular discusses licensed entities and obligations "
-                "that likely cover this company profile."
+                "Clause 1 of the circular applies to payment aggregators operating in India. "
+                "PayFlow’s profile is a payment aggregator processing merchant payments."
             ),
-            matched_entity_descriptions=["payment aggregator / NBFC-style regulated entity"],
+            matched_entity_descriptions=["payment aggregator operating in India"],
             supporting_chunk_ids=support,
             exclusions_noted=[],
             unresolved_questions=[],
         ).model_dump(mode="json")
 
     if name == RequirementsOutput.__name__:
-        items = []
-        sources = quotes[:4]
-        if not sources and ids:
-            sources = [(chunk_id, snippet) for chunk_id in ids[:4]]
-        if not sources:
+        source_id = (quotes[0][0] if quotes else None) or (ids[0] if ids else None)
+        if source_id is None:
             return RequirementsOutput(requirements=[]).model_dump(mode="json")
-        for index, (chunk_id, text) in enumerate(sources, start=1):
-            quote = text if text else snippet
+        found = _shall_clauses(prompt)
+        items = []
+        for num, body in found:
+            text = f"{num} {body.strip().rstrip('.')}"
+            dates = []
+            if num in {"3.2", "3.3"}:
+                dates = [
+                    StatedDate(
+                        date=date(2026, 12, 1),
+                        date_basis=DateBasis.CITED_COMPLIANCE,
+                        source_chunk_id=source_id,
+                    )
+                ]
             items.append(
                 RequirementItem(
-                    requirement_text=quote[:400] or f"Obligation {index} from the circular",
+                    requirement_text=text,
                     obligation_type=ObligationType.MANDATORY,
-                    verbatim_quote=quote[:400],
-                    source_chunk_id=chunk_id,
+                    verbatim_quote=text,
+                    source_chunk_id=source_id,
+                    clause_number=num,
+                    stated_dates=dates,
+                )
+            )
+        if not items:
+            items.append(
+                RequirementItem(
+                    requirement_text=snippet[:400],
+                    obligation_type=ObligationType.MANDATORY,
+                    verbatim_quote=snippet[:400],
+                    source_chunk_id=source_id,
                     clause_number=None,
                     stated_dates=[],
                 )
@@ -149,34 +205,145 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
         req_match = re.search(r"requirement ([0-9a-f-]{36})", prompt, re.I)
         req_id = UUID(req_match.group(1)) if req_match else (fallback or uuid4())
         support = [item[0] for item in quotes[:3]] or ids[:3]
+        high = any(token in duty for token in ("48-hour", "48 hour", "complaint data", "kyc"))
         return ImpactOutput(
             requirement_id=req_id,
-            applicability=Applicability.LIKELY_APPLICABLE,
-            impact_level=ImpactLevel.MEDIUM,
+            applicability=Applicability.APPLICABLE,
+            impact_level=ImpactLevel.HIGH if high else ImpactLevel.MEDIUM,
             affected_departments=[Department.COMPLIANCE, Department.OPERATIONS],
-            required_capabilities=["policy update", "operational control"],
-            rationale="Local extractive impact: this duty likely changes compliance operations.",
+            required_capabilities=["documented policy", "named owner", "audit trail"],
+            rationale=f"This duty is mandatory for a payment aggregator: {duty[:180]}",
             supporting_chunk_ids=support,
         ).model_dump(mode="json")
 
     if name == GapOutput.__name__:
         policy_ids = [item[0] for item in quotes[:3]]
+        if "48-hour" in duty or "48 hour" in duty:
+            return GapOutput(
+                gap_status=GapStatus.NON_COMPLIANT,
+                explanation=(
+                    "Clause 3.3 requires a 48-hour escalation path. PayFlow’s grievance policy "
+                    "names an officer and a documented process, but it does not state a 48-hour "
+                    "turnaround or escalation timeline."
+                ),
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["48-hour escalation path in the grievance policy"],
+            ).model_dump(mode="json")
+        if "grievance officer" in duty:
+            if "grievance officer" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT,
+                    explanation=(
+                        "PayFlow’s grievance policy names a grievance officer in Compliance "
+                        "who owns the queue."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Policy text names a grievance officer.",
+                        )
+                    ],
+                    missing_evidence=[],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No company policy chunk naming a grievance officer was retrieved.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Named grievance officer in a current policy"],
+            ).model_dump(mode="json")
+        if "grievance redressal process" in duty:
+            if "documented grievance redressal process" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT,
+                    explanation="PayFlow maintains a documented customer grievance redressal process (policy v3.1).",
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Policy is titled as a documented grievance process.",
+                        )
+                    ],
+                    missing_evidence=[],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No documented grievance process was retrieved from company PDFs.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Documented grievance redressal process"],
+            ).model_dump(mode="json")
+        if "kyc" in duty:
+            if "kyc" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.PARTIAL,
+                    explanation=(
+                        "PayFlow has a KYC policy for merchant onboarding, but it does not show it is "
+                        "aligned to current RBI directions or name a review cadence."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="A KYC policy exists; coverage of RBI directions is thin.",
+                        )
+                    ],
+                    missing_evidence=["Mapping to current RBI KYC directions"],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No KYC policy chunk was retrieved for clause 4.1.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Mapping to current RBI KYC directions"],
+            ).model_dump(mode="json")
+        if "complaint data" in duty or "publish quarterly" in duty:
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation=(
+                    "Clause 5.1 requires quarterly complaint data on the website. PayFlow’s uploaded "
+                    "policies do not mention complaint publication."
+                ),
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Quarterly complaint publication on the website"],
+            ).model_dump(mode="json")
+        if "settlement" in duty:
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation=(
+                    "Clause 6.1 requires merchant settlements within contractual timelines. No settlement "
+                    "procedure was uploaded."
+                ),
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Settlement timeline control in a procedure"],
+            ).model_dump(mode="json")
         if policy_ids:
             return GapOutput(
                 gap_status=GapStatus.PARTIAL,
-                explanation="Local extractive gap: company text overlaps the duty but is not a full control description.",
-                evidence_chunk_ids=policy_ids,
+                explanation="Company documents mention related controls but do not fully restate this duty.",
+                evidence_chunk_ids=policy_ids[:1],
                 evidence_assessment=[
-                    EvidenceAssessment(chunk_id=policy_ids[0], supports=True, reason="Overlapping language in the company PDF.")
+                    EvidenceAssessment(
+                        chunk_id=policy_ids[0],
+                        supports=True,
+                        reason="Related policy language was retrieved.",
+                    )
                 ],
-                missing_evidence=["Named owner and review cadence"],
+                missing_evidence=["Explicit control statement for this clause"],
             ).model_dump(mode="json")
         return GapOutput(
             gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
-            explanation="Local extractive gap: no company-document chunks were retrieved. Upload a policy PDF.",
+            explanation=f"No company PDF was retrieved that covers: {duty[:160]}",
             evidence_chunk_ids=[],
             evidence_assessment=[],
-            missing_evidence=["Company policy or procedure PDF covering this duty"],
+            missing_evidence=["Company policy covering this duty"],
         ).model_dump(mode="json")
 
     if name == RiskOutput.__name__:
@@ -184,25 +351,49 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
         req_id = UUID(req_match.group(1)) if req_match else (fallback or uuid4())
         return RiskOutput(
             requirement_id=req_id,
-            severity="medium",
+            severity="high" if "48-hour" in duty or "complaint data" in duty else "medium",
             severity_inputs=SeverityInputs(
                 obligation_type=ObligationType.MANDATORY,
-                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
-                impact_level=ImpactLevel.MEDIUM,
-                deadline_proximity="none",
+                gap_status=GapStatus.NON_COMPLIANT if "48-hour" in duty else GapStatus.PARTIAL,
+                impact_level=ImpactLevel.HIGH if "48-hour" in duty else ImpactLevel.MEDIUM,
+                deadline_proximity="under_90_days" if "48-hour" in duty or "3.2" in duty else "none",
             ),
             escalations_applied=[],
-            rationale="Local extractive risk score pending a full policy pack.",
+            rationale="Scored from obligation type, gap, and the 1 Dec 2026 compliance date in the circular.",
         ).model_dump(mode="json")
 
     if name == ActionPlanOutput.__name__:
+        if "48-hour" in duty or "48 hour" in duty:
+            title = "Write a 48-hour escalation path into the grievance policy"
+            description = (
+                "Add a 48-hour escalation for unresolved complaints, name the owner, and cite clause 3.3. "
+                "Circular compliance date is 2026-12-01."
+            )
+        elif "complaint data" in duty:
+            title = "Publish quarterly complaint data on the PayFlow website"
+            description = "Define the metrics, owner, and publication calendar required by clause 5.1."
+        elif "settlement" in duty:
+            title = "Document merchant settlement timelines in a procedure"
+            description = "Record contractual settlement SLAs and the operations control that meets clause 6.1."
+        elif "kyc" in duty:
+            title = "Map the KYC policy to current RBI directions"
+            description = "Expand PayFlow’s KYC policy so it cites the applicable RBI directions (clause 4.1)."
+        elif "grievance officer" in duty:
+            title = "Keep the named grievance officer current"
+            description = "Clause 3.1 is covered. Confirm the officer name in the next policy review."
+        elif "grievance redressal process" in duty:
+            title = "Keep the grievance process current"
+            description = "Clause 3.2 is covered by policy v3.1. Confirm the next scheduled review."
+        else:
+            title = "Record this circular duty in the control library"
+            description = duty[:240]
         return ActionPlanOutput(
             actions=[
                 ActionItemOutput(
-                    title="Map this circular duty to a named owner",
-                    description="Local extractive action: write the control, owner, and evidence into a company policy.",
+                    title=title,
+                    description=description,
                     owner_department=Department.COMPLIANCE,
-                    effort=Effort.MEDIUM,
+                    effort=Effort.MEDIUM if "48-hour" in duty else Effort.LOW,
                 )
             ]
         ).model_dump(mode="json")

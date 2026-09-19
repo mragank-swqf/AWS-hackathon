@@ -8,9 +8,11 @@ from typing import Any
 from uuid import UUID
 
 from app.agents.runner import run_analysis
-from app.db.models import ImpactAnalysis
+from app.db.models import ImpactAnalysis, PortfolioRun
 from app.db.session import get_session_factory
 from app.services.ingest import ingest_policy, ingest_regulation
+from app.services.portfolio import run_portfolio
+from app.services.regulatory_ingest import sync_rbi_corpus
 
 logger = logging.getLogger("regimpact.worker")
 
@@ -55,5 +57,23 @@ def handle_run_analysis(body: dict[str, Any]) -> None:
         if session.get(ImpactAnalysis, analysis_id) is None:
             time.sleep(2)
         run_analysis(session, analysis_id)
+
+    _with_session(work)
+
+
+def handle_sync_corpus(body: dict[str, Any]) -> None:
+    def work(session) -> None:
+        sync_rbi_corpus(session)
+
+    _with_session(work)
+
+
+def handle_run_portfolio(body: dict[str, Any]) -> None:
+    run_id = UUID(body["run_id"])
+
+    def work(session) -> None:
+        if session.get(PortfolioRun, run_id) is None:
+            time.sleep(2)
+        run_portfolio(session, run_id)
 
     _with_session(work)
