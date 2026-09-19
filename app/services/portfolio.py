@@ -56,6 +56,12 @@ def refresh_applicability(session: Session, company: Company) -> list[Regulation
                 regulation_id=document.id,
             )
             session.add(existing)
+        if existing.reviewer_applicability:
+            existing.applicability = existing.reviewer_applicability
+            existing.human_review_required = False
+            existing.matched_characteristics = decision.matched_characteristics
+            rows.append(existing)
+            continue
         existing.applicability = decision.applicability.value
         existing.reason = decision.reason
         existing.matched_characteristics = decision.matched_characteristics
@@ -148,11 +154,14 @@ def run_portfolio(session: Session, run_id: UUID) -> None:
     run.status = AnalysisStatus.PROCESSING.value
     session.flush()
     refresh_applicability(session, company)
-    documents = [
-        document
-        for document in applicable_documents(session, company.id)
-        if document.processing_status == "completed"
-    ]
+    documents = sorted(
+        [
+            document
+            for document in applicable_documents(session, company.id)
+            if document.processing_status == "completed"
+        ],
+        key=lambda item: item.title.lower(),
+    )
     analyses: list[ImpactAnalysis] = []
     for document in documents:
         analysis = ImpactAnalysis(

@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
@@ -5,7 +6,7 @@ import pytest
 from app.db.models import Company, RegulatoryDocument
 from app.enums import Applicability, DocumentType, OrganizationType, RegulatoryDomain
 from app.regulators.rbi.catalog import CATALOG
-from app.services.applicability import assess_document
+from app.services.applicability import apply_reviewer_decision, assess_document
 from app.services.regulatory_ingest import DownloadFailed, fetch_official_pdf
 from app.services.requirement_diff import diff_requirement_text
 
@@ -75,6 +76,28 @@ def test_missing_company_type_is_uncertain():
     assert decision.applicability == Applicability.UNCERTAIN
 
 
+def test_person_can_mark_uncertain_as_applies():
+    row = SimpleNamespace(
+        applicability=Applicability.UNCERTAIN.value,
+        human_review_required=True,
+        reason="No entity metadata.",
+        rule_id="missing_document_entities",
+        reviewer_applicability=None,
+        reviewer_decided_at=None,
+    )
+    apply_reviewer_decision(row, Applicability.APPLICABLE.value)
+    assert row.applicability == Applicability.APPLICABLE.value
+    assert row.human_review_required is False
+    assert row.reviewer_applicability == Applicability.APPLICABLE.value
+    assert row.rule_id == "human_decision"
+
+
+def test_person_cannot_mark_uncertain():
+    row = SimpleNamespace(applicability=Applicability.UNCERTAIN.value)
+    with pytest.raises(ValueError):
+        apply_reviewer_decision(row, Applicability.UNCERTAIN.value)
+
+
 def test_requirement_diff_added_modified_removed_unchanged():
     previous = """
 3.1 Every payment aggregator shall appoint a grievance officer.
@@ -124,6 +147,10 @@ def test_catalog_has_official_source_urls_and_versions():
     assert all(entry.source_url.startswith("https://www.rbi.org.in/") for entry in CATALOG)
     versions = [entry.version_label for entry in CATALOG if entry.corpus_key == "rbi.grievance.pa"]
     assert versions[0] != versions[1]
+    unique_keys = {entry.corpus_key for entry in CATALOG}
+    assert len(unique_keys) >= 16
+    assert "rbi.data.payment_system_storage" in unique_keys
+    assert "rbi.payments.pa_cross_border" in unique_keys
 
 
 def test_seed_pdfs_are_valid_pdfs():

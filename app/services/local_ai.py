@@ -47,7 +47,7 @@ QUOTE_RE = re.compile(
     re.I | re.S,
 )
 SHALL_RE = re.compile(
-    r"(?P<num>\d+\.\d+)\s+(?P<body>(?:Every|The|Merchant).{0,180}?\bshall\b.{0,180}?)(?=\.\s|\n|$)",
+    r"(?P<num>\d+\.\d+)\s+(?P<body>(?:Every|The|Merchant|A |Regulated|Payment|NBFCs?|Banks?|Issuers?).{0,220}?\bshall\b.{0,220}?)(?=\.\s|\n|$)",
     re.I | re.S,
 )
 REQ_IN_PROMPT = re.compile(r"Requirement:\s*(.+?)(?:\s+compliant or partial|\n|$)", re.I)
@@ -313,7 +313,132 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
                 evidence_assessment=[],
                 missing_evidence=["Quarterly complaint publication on the website"],
             ).model_dump(mode="json")
+        if "tokenis" in duty or "card credential" in duty:
+            if "tokenis" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.PARTIAL,
+                    explanation=(
+                        "PayFlow tokenises cards on hosted checkout and does not keep full PAN, "
+                        "but the procedure does not cover soundbox or card-present flows."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Checkout tokenisation is described; device flows are excluded.",
+                        )
+                    ],
+                    missing_evidence=["Tokenisation for in-store and offline card flows"],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No card-tokenisation procedure was retrieved.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Card tokenisation procedure"],
+            ).model_dump(mode="json")
+        if "turn around time" in duty or "failed transaction" in duty:
+            if ("turn around" in policy or "tat" in policy) and policy_ids:
+                auto = "auto-compensat" in policy or "automatically" in policy
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT if auto else GapStatus.PARTIAL,
+                    explanation=(
+                        "PayFlow tracks RBI TAT clocks for failed UPI and card collects. "
+                        "Customer compensation when the clock is missed is still posted by hand."
+                        if not auto
+                        else "PayFlow tracks TAT and auto-compensates missed clocks."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Failed-transaction TAT SOP was retrieved.",
+                        )
+                    ],
+                    missing_evidence=[] if auto else ["Automatic customer compensation on missed TAT"],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No failed-transaction TAT procedure was retrieved.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Failed-transaction TAT procedure"],
+            ).model_dump(mode="json")
+        if (
+            "payment system data" in duty
+            or "store the entire payment" in duty
+            or "data localisation" in duty
+        ):
+            if "in india" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT,
+                    explanation=(
+                        "PayFlow’s localisation policy stores payment system data in India and "
+                        "names the CISO as owner."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Policy states payment system data is stored in India.",
+                        )
+                    ],
+                    missing_evidence=[],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No India data-residency control was retrieved for payment system data.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Payment system data localisation policy"],
+            ).model_dump(mode="json")
+        if "internal ombudsman" in duty:
+            if "internal ombudsman" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT,
+                    explanation=(
+                        "PayFlow’s charter appoints an internal ombudsman who reviews complaints "
+                        "the operator proposes to reject."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Internal ombudsman charter was retrieved.",
+                        )
+                    ],
+                    missing_evidence=[],
+                ).model_dump(mode="json")
+            return GapOutput(
+                gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
+                explanation="No internal ombudsman charter was retrieved.",
+                evidence_chunk_ids=[],
+                evidence_assessment=[],
+                missing_evidence=["Internal ombudsman appointment"],
+            ).model_dump(mode="json")
         if "settlement" in duty:
+            if "settlement" in policy and policy_ids:
+                covered = "timelines stated" in policy or "t+1" in policy
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT if covered else GapStatus.PARTIAL,
+                    explanation=(
+                        "PayFlow’s settlement procedure settles QR and checkout on T+1 against "
+                        "the merchant agreement. Cross-border collections are excluded."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Settlement procedure states T+1 and agreement timelines.",
+                        )
+                    ],
+                    missing_evidence=[] if covered else ["Contractual settlement SLA"],
+                ).model_dump(mode="json")
             return GapOutput(
                 gap_status=GapStatus.INSUFFICIENT_EVIDENCE,
                 explanation=(
@@ -324,6 +449,42 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
                 evidence_assessment=[],
                 missing_evidence=["Settlement timeline control in a procedure"],
             ).model_dump(mode="json")
+        if "information security policy" in duty:
+            if "information security policy" in policy and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.PARTIAL,
+                    explanation=(
+                        "PayFlow has an information security policy for UPI and checkout, but it "
+                        "does not name a review cadence."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Information security policy exists; cadence is missing.",
+                        )
+                    ],
+                    missing_evidence=["Named review cadence"],
+                ).model_dump(mode="json")
+        if "outsourc" in duty:
+            if ("outsourcing agreement" in policy or "vendor due diligence" in policy) and policy_ids:
+                return GapOutput(
+                    gap_status=GapStatus.COMPLIANT,
+                    explanation=(
+                        "PayFlow’s IT outsourcing policy requires a documented agreement, vendor "
+                        "due diligence, and audit rights."
+                    ),
+                    evidence_chunk_ids=policy_ids[:1],
+                    evidence_assessment=[
+                        EvidenceAssessment(
+                            chunk_id=policy_ids[0],
+                            supports=True,
+                            reason="Outsourcing policy covers diligence and audit rights.",
+                        )
+                    ],
+                    missing_evidence=[],
+                ).model_dump(mode="json")
         if policy_ids:
             return GapOutput(
                 gap_status=GapStatus.PARTIAL,
@@ -384,6 +545,24 @@ def local_json(prompt: str, model: type[BaseModel]) -> dict[str, Any]:
         elif "grievance redressal process" in duty:
             title = "Keep the grievance process current"
             description = "Clause 3.2 is covered by policy v3.1. Confirm the next scheduled review."
+        elif "tokenis" in duty or "card credential" in duty:
+            title = "Tokenise stored card credentials"
+            description = "Replace stored PAN data with tokens and document the residual-storage exception."
+        elif "turn around time" in duty or "failed transaction" in duty:
+            title = "Meet failed-transaction TAT and auto-compensate"
+            description = "Map the RBI TAT table into operations and auto-credit when the clock is missed."
+        elif "payment system data" in duty or "data localisation" in duty or "store the entire payment" in duty:
+            title = "Confirm payment-system data stays in India"
+            description = "Inventory payment-system data stores and record the India-residency control."
+        elif "internal ombudsman" in duty:
+            title = "Appoint an internal ombudsman"
+            description = "Name an internal ombudsman and route proposed rejections through that office."
+        elif "cross-border" in duty:
+            title = "Separate cross-border PA authorisation"
+            description = "Confirm whether PayFlow needs PA-CB authorisation and keep collections segregated."
+        elif "offline" in duty:
+            title = "Cap offline digital payments"
+            description = "Apply the per-transaction limit and reversal rule for offline payments."
         else:
             title = "Record this circular duty in the control library"
             description = duty[:240]

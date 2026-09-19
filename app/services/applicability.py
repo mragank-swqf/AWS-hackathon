@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datetime import UTC, datetime
+
 from app.db.models import Company, RegulatoryDocument
 from app.enums import Applicability, RegulatoryDomain
 
@@ -96,3 +98,19 @@ def assess_document(company: Company, document: RegulatoryDocument) -> Applicabi
         rule_id="entity_type_match",
         human_review_required=False,
     )
+
+
+REVIEWER_CHOICES = {Applicability.APPLICABLE.value, Applicability.NOT_APPLICABLE.value}
+
+
+def apply_reviewer_decision(row, applicability: str) -> None:
+    if applicability not in REVIEWER_CHOICES:
+        raise ValueError("A person can only mark a document as applies or does not apply.")
+    label = "applies" if applicability == Applicability.APPLICABLE.value else "does not apply"
+    row.reviewer_applicability = applicability
+    row.reviewer_decided_at = datetime.now(UTC).replace(tzinfo=None)
+    row.applicability = applicability
+    row.human_review_required = False
+    row.rule_id = "human_decision"
+    row.reason = f"A person marked this as {label}."
+

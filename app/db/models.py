@@ -341,6 +341,8 @@ class RegulationApplicability(Base):
     matched_characteristics: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
     rule_id: Mapped[str | None] = mapped_column(Text)
     human_review_required: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    reviewer_applicability: Mapped[str | None] = mapped_column(Text)
+    reviewer_decided_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     regulation: Mapped[RegulatoryDocument] = relationship()

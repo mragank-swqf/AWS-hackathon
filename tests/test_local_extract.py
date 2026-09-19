@@ -4,7 +4,7 @@ from app.agents.contracts import ActionPlanOutput, GapOutput, RequirementsOutput
 from app.agents.prompts import fence
 from app.enums import GapStatus
 from app.services.local_ai import local_json
-from demo.documents import GRIEVANCE_PAGES, KYC_PAGES, REGULATION_PAGES
+from demo.documents import DATA_PAGES, GRIEVANCE_PAGES, KYC_PAGES, REGULATION_PAGES, SETTLEMENT_PAGES
 
 
 def test_local_extract_splits_payflow_shall_clauses():
@@ -51,6 +51,24 @@ def test_local_gap_maps_payflow_policies():
         GapOutput,
     )
     assert complaints["gap_status"] == GapStatus.INSUFFICIENT_EVIDENCE.value
+
+    settle_id = uuid4()
+    settlement = fence(f"[chunk_id={settle_id} pages=1-2]\n" + "\n".join(SETTLEMENT_PAGES))
+    settle_gap = local_json(
+        "Requirement: 6.1 Merchant settlements shall be completed within the "
+        "timelines stated in the agreement. compliant or partial\n" + settlement,
+        GapOutput,
+    )
+    assert settle_gap["gap_status"] == GapStatus.COMPLIANT.value
+
+    data_id = uuid4()
+    data = fence(f"[chunk_id={data_id} pages=1-2]\n" + "\n".join(DATA_PAGES))
+    data_gap = local_json(
+        "Requirement: 2.1 Every payment system operator shall store the entire "
+        "payment system data in India. compliant or partial\n" + data,
+        GapOutput,
+    )
+    assert data_gap["gap_status"] == GapStatus.COMPLIANT.value
 
     action = local_json(
         "Requirement: 3.3 The grievance redressal process shall include a 48-hour escalation path.",

@@ -12,13 +12,16 @@ from app.api.errors import AppError
 from app.db.models import (
     Company,
     CorpusIngestRun,
+    ImpactAnalysis,
     PortfolioRun,
+    RegulationApplicability,
     RegulatoryChange,
     RegulatoryDocument,
 )
 from app.db.session import get_db
 from app.enums import AnalysisStatus, LifecycleStatus
 from app.schemas.models import (
+    ApplicabilityDecisionWrite,
     ApplicabilityRead,
     DashboardRead,
     PortfolioRunRead,
@@ -27,6 +30,7 @@ from app.schemas.models import (
     RequirementChangeRead,
 )
 from app.security.company_scope import get_company_id
+from app.services.applicability import apply_reviewer_decision
 from app.services.portfolio import refresh_applicability
 from app.services.queue import enqueue_run_portfolio, enqueue_sync_corpus
 
@@ -82,10 +86,50 @@ def list_applicable(
                 rule_id=row.rule_id,
                 human_review_required=row.human_review_required,
                 processing_status=document.processing_status,
+                reviewer_applicability=row.reviewer_applicability,
             )
         )
     payload.sort(key=lambda item: (item.applicability, item.title))
     return payload
+
+
+@router.post("/applicable/{row_id}/decide", response_model=ApplicabilityRead)
+def decide_applicable(
+    row_id: UUID,
+    payload: ApplicabilityDecisionWrite,
+    db: Session = Depends(get_db),
+    company_id: UUID = Depends(get_company_id),
+) -> ApplicabilityRead:
+    _company(db, company_id)
+    row = db.get(RegulationApplicability, row_id)
+    if row is None or row.company_id != company_id:
+        raise AppError("NOT_FOUND", "Applicability row not found", status_code=404)
+    try:
+        apply_reviewer_decision(row, payload.applicability)
+    except ValueError as exc:
+        raise AppError("VALIDATION_ERROR", str(exc), status_code=400) from exc
+    db.commit()
+    db.refresh(row)
+    document = db.get(RegulatoryDocument, row.regulation_id)
+    if document is None:
+        raise AppError("NOT_FOUND", "Regulation not found", status_code=404)
+    return ApplicabilityRead(
+        id=row.id,
+        regulation_id=document.id,
+        title=document.title,
+        regulator=document.regulator,
+        document_type=document.document_type,
+        regulatory_domain=document.regulatory_domain,
+        source_url=document.source_url,
+        lifecycle_status=document.lifecycle_status,
+        applicability=row.applicability,
+        reason=row.reason,
+        matched_characteristics=row.matched_characteristics or [],
+        rule_id=row.rule_id,
+        human_review_required=row.human_review_required,
+        processing_status=document.processing_status,
+        reviewer_applicability=row.reviewer_applicability,
+    )
 
 
 @router.get("/changes", response_model=list[RegulatoryChangeRead])
@@ -156,7 +200,13 @@ def dashboard(
     )
     ingest = db.scalar(select(CorpusIngestRun).order_by(CorpusIngestRun.started_at.desc()))
     result = (latest_run.result if latest_run and isinstance(latest_run.result, dict) else {}) or {}
-    analysis_ids = result.get("analysis_ids") or []
+    analysis_ids = [UUID(value) for value in (result.get("analysis_ids") or [])]
+    if not analysis_ids and latest_run:
+        analysis_ids = list(
+            db.scalars(
+                select(ImpactAnalysis.id).where(ImpactAnalysis.portfolio_run_id == latest_run.id)
+            )
+        )
     confidence = result.get("assessment_confidence") or {
         "label": "Assessment confidence",
         "definition": (
@@ -178,7 +228,8 @@ def dashboard(
         latest_change_summary=latest_change.summary if latest_change else None,
         assessment_confidence=confidence,
         portfolio_run_id=latest_run.id if latest_run else None,
-        analysis_id=UUID(analysis_ids[0]) if analysis_ids else None,
+        analysis_id=analysis_ids[0] if analysis_ids else None,
+        analysis_ids=analysis_ids,
         ingest_status=ingest.status if ingest else None,
     )
 

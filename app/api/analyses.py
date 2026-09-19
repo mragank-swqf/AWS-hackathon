@@ -90,8 +90,9 @@ def start_analysis(
 
 
 def _to_analysis_read(analysis: ImpactAnalysis) -> AnalysisRead:
+    title = analysis.regulation.title if analysis.regulation is not None else None
     return AnalysisRead.model_validate(analysis).model_copy(
-        update={"review_status": _review_status(analysis)}
+        update={"review_status": _review_status(analysis), "regulation_title": title}
     )
 
 

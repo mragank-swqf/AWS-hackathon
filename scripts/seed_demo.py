@@ -1,4 +1,4 @@
-"""Load the PayFlow demo company, two policies, and one rule PDF (spec 16)."""
+"""Load the PayFlow demo company, policies, and one rule PDF (spec 16)."""
 
 from __future__ import annotations
 
@@ -6,15 +6,16 @@ import argparse
 from datetime import date
 from uuid import uuid4
 
+from sqlalchemy import select
+
 from app.config import get_settings
 from app.db.models import Company, CompanyPolicy, RegulatoryDocument
 from app.db.session import get_session_factory
-from app.enums import DocumentType, EvidenceType, OrganizationType, ProcessingStatus
+from app.enums import DocumentType, ProcessingStatus
 from app.services.hashing import sha256_bytes
 from app.services.ingest import ingest_policy, ingest_regulation
 from app.services.storage import policy_key, put_private_pdf, regulation_key
-from demo.documents import DEMO_COMPANY_ID, grievance_pdf, kyc_pdf, regulation_pdf
-from sqlalchemy import select
+from demo.documents import DEMO_COMPANY_ID, PAYFLOW_PROFILE, POLICY_PACK, regulation_pdf
 
 
 def seed(*, run_ingest: bool = True) -> None:
@@ -23,28 +24,12 @@ def seed(*, run_ingest: bool = True) -> None:
     try:
         company = session.get(Company, DEMO_COMPANY_ID)
         if company is None:
-            company = Company(
-                id=DEMO_COMPANY_ID,
-                company_name="PayFlow Technologies",
-                organization_type=OrganizationType.PAYMENT_AGGREGATOR.value,
-                business_model="Online merchant payment processing",
-                operating_regions=["India"],
-                products=[
-                    "Online payments",
-                    "Merchant settlements",
-                    "Refund processing",
-                    "Customer grievance handling",
-                ],
-                customer_segments=["Merchants", "Consumers"],
-                regulatory_entities=["RBI"],
-                uses_customer_data=True,
-                uses_automated_decisioning=False,
-                has_outsourced_operations=True,
-                existing_policies=["KYC Policy", "Grievance Policy"],
-                internal_controls=["Access reviews", "Audit logging"],
-            )
+            company = Company(id=DEMO_COMPANY_ID, **PAYFLOW_PROFILE)
             session.add(company)
             session.flush()
+        else:
+            for key, value in PAYFLOW_PROFILE.items():
+                setattr(company, key, value)
 
         def store_regulation() -> RegulatoryDocument:
             data = regulation_pdf()
@@ -74,7 +59,8 @@ def seed(*, run_ingest: bool = True) -> None:
             session.flush()
             return document
 
-        def store_policy(title: str, data: bytes, filename: str) -> CompanyPolicy:
+        def store_policy(spec) -> CompanyPolicy:
+            data = spec.pdf()
             digest = sha256_bytes(data)
             existing = session.scalar(
                 select(CompanyPolicy).where(
@@ -85,17 +71,17 @@ def seed(*, run_ingest: bool = True) -> None:
             if existing:
                 return existing
             doc_id = uuid4()
-            key = policy_key(company.id, doc_id, filename)
+            key = policy_key(company.id, doc_id, spec.filename)
             put_private_pdf(key, data)
             policy = CompanyPolicy(
                 id=doc_id,
                 company_id=company.id,
-                title=title,
-                evidence_type=EvidenceType.POLICY.value,
-                version_label="v3.1" if "Grievance" in title else "v1.0",
+                title=spec.title,
+                evidence_type=spec.evidence_type,
+                version_label=spec.version_label,
                 effective_date=date(2026, 4, 1),
-                owner_department="Compliance",
-                approved_by="Board",
+                owner_department=spec.owner_department,
+                approved_by=spec.approved_by,
                 s3_key=key,
                 content_hash=digest,
                 processing_status=ProcessingStatus.QUEUED.value,
@@ -105,22 +91,19 @@ def seed(*, run_ingest: bool = True) -> None:
             return policy
 
         regulation = store_regulation()
-        grievance = store_policy(
-            "Customer Grievance Redressal Policy", grievance_pdf(), "grievance-policy.pdf"
-        )
-        kyc = store_policy("Know Your Customer Policy", kyc_pdf(), "kyc-policy.pdf")
+        policies = [store_policy(spec) for spec in POLICY_PACK]
         session.commit()
 
         if run_ingest:
             ingest_regulation(session, regulation.id)
-            ingest_policy(session, grievance.id)
-            ingest_policy(session, kyc.id)
+            for policy in policies:
+                ingest_policy(session, policy.id)
             session.commit()
 
         print(f"DEMO_COMPANY_ID={company.id}")
         print(f"REGULATION_ID={regulation.id}")
-        print(f"GRIEVANCE_POLICY_ID={grievance.id}")
-        print(f"KYC_POLICY_ID={kyc.id}")
+        for policy in policies:
+            print(f"POLICY {policy.title}={policy.id}")
     except Exception:
         session.rollback()
         raise

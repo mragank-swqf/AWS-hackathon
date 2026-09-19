@@ -11,6 +11,31 @@ const SCREENS = [
   ["actions", "Actions"],
 ];
 
+const NAV_GROUPS = [
+  [
+    "Intelligence",
+    [
+      ["dashboard", "Dashboard"],
+      ["applicable", "Applicable"],
+      ["updates", "Updates"],
+    ],
+  ],
+  [
+    "Company",
+    [
+      ["profile", "Profile"],
+      ["evidence", "Evidence"],
+    ],
+  ],
+  [
+    "Work",
+    [
+      ["results", "Analysis"],
+      ["actions", "Actions"],
+    ],
+  ],
+];
+
 const ORG_TYPES = [
   ["payment_aggregator", "Payment aggregator"],
   ["payment_gateway", "Payment gateway"],
@@ -345,20 +370,25 @@ function useAsync(loader, deps) {
   const [state, setState] = useState({ status: "loading", data: null, message: "" });
   useEffect(() => {
     let cancelled = false;
+    let timer;
     setState({ status: "loading", data: null, message: "" });
-    loader()
-      .then((data) => {
-        if (cancelled) return;
-        const empty = Array.isArray(data) ? data.length === 0 : data == null;
-        setState({ status: empty ? "empty" : "ready", data, message: "" });
-      })
-      .catch((error) => {
-        if (!cancelled) {
+    function load(attempt) {
+      loader()
+        .then((data) => {
+          if (cancelled) return;
+          const empty = Array.isArray(data) ? data.length === 0 : data == null;
+          setState({ status: empty ? "empty" : "ready", data, message: "" });
+        })
+        .catch((error) => {
+          if (cancelled) return;
           setState({ status: "error", data: null, message: error.message });
-        }
-      });
+          if (attempt < 12) timer = setTimeout(() => load(attempt + 1), 1500);
+        });
+    }
+    load(0);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, deps);
   return [state, setState];
@@ -395,9 +425,19 @@ export default function App() {
     window.matchMedia("(min-width: 50.0625rem)").matches,
   );
   const [company, setCompany] = useState(null);
-  const [selectedAnalysis, setSelectedAnalysis] = useState(
-    window.localStorage.getItem("regimpact_analysis_id") || "",
-  );
+  const [selectedAnalyses, setSelectedAnalyses] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem("regimpact_analysis_ids");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      }
+    } catch {
+      /* ignore */
+    }
+    const one = window.localStorage.getItem("regimpact_analysis_id");
+    return one ? [one] : [];
+  });
 
   useEffect(() => {
     window.localStorage.setItem("regimpact_screen", screen);
@@ -405,16 +445,48 @@ export default function App() {
 
   useEffect(() => {
     const id = window.localStorage.getItem("regimpact_company_id");
-    if (!id) return;
-    api
-      .getCompany(id)
-      .then((data) => setCompany(data))
-      .catch(() => setCompany(null));
+    if (!id) return undefined;
+    let cancelled = false;
+    let timer;
+    function load(attempt) {
+      api
+        .getCompany(id)
+        .then((data) => {
+          if (!cancelled) setCompany(data);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (attempt < 12) timer = setTimeout(() => load(attempt + 1), 1500);
+          else setCompany(null);
+        });
+    }
+    load(0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, []);
 
-  function rememberAnalysis(id) {
-    setSelectedAnalysis(id);
-    window.localStorage.setItem("regimpact_analysis_id", id);
+  useEffect(() => {
+    if (!company) return;
+    api
+      .getDashboard()
+      .then((dash) => {
+        const ids = dash.analysis_ids?.length
+          ? dash.analysis_ids
+          : dash.analysis_id
+            ? [dash.analysis_id]
+            : [];
+        if (ids.length) rememberAnalyses(ids);
+      })
+      .catch(() => {});
+  }, [company?.id]);
+
+  function rememberAnalyses(ids) {
+    const list = (Array.isArray(ids) ? ids : ids ? [ids] : []).filter(Boolean).map(String);
+    setSelectedAnalyses(list);
+    window.localStorage.setItem("regimpact_analysis_ids", JSON.stringify(list));
+    if (list[0]) window.localStorage.setItem("regimpact_analysis_id", list[0]);
   }
 
   return (
@@ -439,19 +511,24 @@ export default function App() {
           </button>
         </div>
         <nav id="app-nav" aria-label="Screens">
-          {SCREENS.map(([id, label]) => (
-            <button
-              key={id}
-              className="nav-item"
-              type="button"
-              aria-current={screen === id ? "page" : undefined}
-              onClick={() => {
-                setScreen(id);
-                if (window.matchMedia("(max-width: 50rem)").matches) setNavOpen(false);
-              }}
-            >
-              {label}
-            </button>
+          {NAV_GROUPS.map(([group, items]) => (
+            <div className="nav-group" key={group}>
+              <p className="nav-group-label">{group}</p>
+              {items.map(([id, label]) => (
+                <button
+                  key={id}
+                  className="nav-item"
+                  type="button"
+                  aria-current={screen === id ? "page" : undefined}
+                  onClick={() => {
+                    setScreen(id);
+                    if (window.matchMedia("(max-width: 50rem)").matches) setNavOpen(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           ))}
         </nav>
       </aside>
@@ -461,8 +538,8 @@ export default function App() {
             company={company}
             onOpenApplicable={() => setScreen("applicable")}
             onOpenUpdates={() => setScreen("updates")}
-            onOpenResults={(id) => {
-              rememberAnalysis(id);
+            onOpenResults={(ids) => {
+              rememberAnalyses(ids);
               setScreen("results");
             }}
             onOpenProfile={() => setScreen("profile")}
@@ -480,8 +557,8 @@ export default function App() {
         )}
         {screen === "applicable" && (
           <ApplicableRegulations
-            onRunImpact={(id) => {
-              rememberAnalysis(id);
+            onRunImpact={(ids) => {
+              rememberAnalyses(ids);
               setScreen("results");
             }}
             goEvidence={() => setScreen("evidence")}
@@ -497,7 +574,7 @@ export default function App() {
         {screen === "evidence" && <EvidenceLibrary goSetup={() => setScreen("applicable")} />}
         {screen === "setup" && (
           <AnalysisSetup
-            onStarted={rememberAnalysis}
+            onStarted={(id) => rememberAnalyses([id])}
             goResults={() => setScreen("results")}
             goProfile={() => setScreen("profile")}
             goRegulations={() => setScreen("regulations")}
@@ -505,13 +582,13 @@ export default function App() {
         )}
         {screen === "results" && (
           <AnalysisResults
-            analysisId={selectedAnalysis}
+            analysisIds={selectedAnalyses}
             goActions={() => setScreen("actions")}
             goSetup={() => setScreen("applicable")}
           />
         )}
         {screen === "actions" && (
-          <ActionTracker analysisId={selectedAnalysis} goSetup={() => setScreen("applicable")} />
+          <ActionTracker analysisIds={selectedAnalyses} goSetup={() => setScreen("applicable")} />
         )}
       </main>
     </div>
@@ -519,24 +596,27 @@ export default function App() {
 }
 
 async function waitForPortfolioAnalysis() {
-  for (let attempt = 0; attempt < 45; attempt += 1) {
+  for (let attempt = 0; attempt < 90; attempt += 1) {
     const dash = await api.getDashboard();
-    if (dash.analysis_id && dash.requirements_assessed > 0) return dash.analysis_id;
+    const ids = dash.analysis_ids?.length ? dash.analysis_ids : dash.analysis_id ? [dash.analysis_id] : [];
+    if (ids.length && dash.requirements_assessed > 0) return ids;
     await new Promise((resolve) => setTimeout(resolve, 2000));
   }
   const dash = await api.getDashboard();
-  return dash.analysis_id;
+  if (dash.analysis_ids?.length) return dash.analysis_ids;
+  return dash.analysis_id ? [dash.analysis_id] : [];
 }
 
-function StatRow({ label, value, hint }) {
+function PageHeader({ kicker, title, lede, children }) {
   return (
-    <div className="stat-row">
-      <dt>{label}</dt>
-      <dd>
-        <strong>{value}</strong>
-        {hint ? <span className="muted"> {hint}</span> : null}
-      </dd>
-    </div>
+    <header className="page-head">
+      <div>
+        {kicker ? <p className="kicker">{kicker}</p> : null}
+        <h1 className="page-title">{title}</h1>
+        {lede ? <p className="lede">{lede}</p> : null}
+      </div>
+      {children ? <div className="page-head-actions">{children}</div> : null}
+    </header>
   );
 }
 
@@ -545,6 +625,7 @@ function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, on
     company?.id,
   ]);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
   const data = state.data;
 
@@ -553,9 +634,9 @@ function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, on
     setError("");
     try {
       await api.startPortfolio();
-      const analysisId = await waitForPortfolioAnalysis();
-      if (analysisId) onOpenResults(analysisId);
-      else setError("Impact is still running. Open Compliance analysis in a minute.");
+      const ids = await waitForPortfolioAnalysis();
+      if (ids.length) onOpenResults(ids);
+      else setError("Impact is still running. Open Analysis in a minute.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -563,28 +644,62 @@ function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, on
     }
   }
 
+  async function refreshCorpus() {
+    setSyncing(true);
+    setError("");
+    try {
+      await api.syncCorpus();
+      setState({ status: "ready", data: await api.getDashboard(), message: "" });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (!company) {
     return (
       <section className="page">
-        <h1 className="page-title">Dashboard</h1>
-        <div className="banner empty">
-          <p>Save a company profile first. The indexed RBI corpus is matched to that profile.</p>
+        <PageHeader
+          kicker="RegImpact"
+          title="Dashboard"
+          lede="Save a company profile first. Indexed RBI circulars are matched to that profile."
+        >
           <button className="btn btn-primary" type="button" onClick={onOpenProfile}>
-            Open company profile
+            Open profile
           </button>
-        </div>
+        </PageHeader>
       </section>
     );
   }
 
+  const stats = data
+    ? [
+        ["Applicable", data.applicable],
+        ["Requirements", data.requirements_assessed],
+        ["Fully evidenced", data.fully_evidenced],
+        ["Partly evidenced", data.partially_evidenced],
+        ["Gaps", data.gaps],
+        ["High-risk gaps", data.high_risk_gaps],
+        ["Needs a person", data.human_review_required],
+        ["RBI documents", data.corpus_documents],
+      ]
+    : [];
+
   return (
     <section className="page">
-      <h1 className="page-title">Dashboard</h1>
-      <p className="lede">
-        Indexed RBI documents are already in the corpus. Upload company evidence, then run impact
-        on what actually applies. This is a working assessment, not legal advice. Local extractive
-        analysis is in use.
-      </p>
+      <PageHeader
+        kicker={company.company_name}
+        title="Impact snapshot"
+        lede="Official RBI circulars are already in the corpus. Upload evidence, then run impact on what applies. Local extractive analysis — not legal advice."
+      >
+        <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
+          {busy ? "Running impact…" : "Run impact"}
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={onOpenApplicable}>
+          Review applicability
+        </button>
+      </PageHeader>
       {error && (
         <div className="banner error" role="alert">
           <p>{error}</p>
@@ -599,43 +714,40 @@ function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, on
         </div>
       )}
       {data && (
-        <article className="card">
-          <p className="kicker">Snapshot</p>
-          <dl className="stat-list">
-            <StatRow label="Applicable regulations" value={data.applicable} />
-            <StatRow label="Requirements assessed" value={data.requirements_assessed} />
-            <StatRow label="Fully evidenced" value={data.fully_evidenced} />
-            <StatRow label="Partly evidenced" value={data.partially_evidenced} />
-            <StatRow label="Gaps" value={data.gaps} />
-            <StatRow label="High-risk gaps" value={data.high_risk_gaps} />
-            <StatRow label="Human review required" value={data.human_review_required} />
-            <StatRow label="Active RBI documents" value={data.corpus_documents} />
-          </dl>
-          {data.assessment_confidence && (
+        <>
+          <ul className="stat-grid">
+            {stats.map(([label, value]) => (
+              <li key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </li>
+            ))}
+          </ul>
+          <article className="card">
+            <p className="kicker">Next</p>
+            {data.latest_change_summary && (
+              <div className="meta-row">
+                <p>Latest RBI update: {data.latest_change_summary}</p>
+                <button className="btn btn-secondary" type="button" onClick={onOpenUpdates}>
+                  Open updates
+                </button>
+              </div>
+            )}
             <p className="muted">
-              {data.assessment_confidence.label}: {data.assessment_confidence.definition}
+              {data.assessment_confidence?.method === "local_extractive"
+                ? "Method: local extractive. This is an evidence-quality score, not a legal probability."
+                : data.assessment_confidence?.definition}
             </p>
-          )}
-          {data.latest_change_summary && (
-            <div className="meta-row">
-              <p>Latest RBI update: {data.latest_change_summary}</p>
-              <button className="btn btn-secondary" type="button" onClick={onOpenUpdates}>
-                Open updates
+            <div className="actions">
+              <button className="btn btn-secondary" type="button" onClick={onOpenEvidence}>
+                Upload evidence
+              </button>
+              <button className="btn btn-secondary" type="button" onClick={refreshCorpus} disabled={syncing}>
+                {syncing ? "Queuing sync…" : "Refresh RBI corpus"}
               </button>
             </div>
-          )}
-          <div className="actions">
-            <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
-              {busy ? "Queuing impact…" : "Run impact on applicable regulations"}
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={onOpenApplicable}>
-              Review applicability
-            </button>
-            <button className="btn btn-secondary" type="button" onClick={onOpenEvidence}>
-              Upload company evidence
-            </button>
-          </div>
-        </article>
+          </article>
+        </>
       )}
     </section>
   );
@@ -644,6 +756,7 @@ function Dashboard({ company, onOpenApplicable, onOpenUpdates, onOpenResults, on
 function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
   const [state, setState] = useAsync(() => api.getApplicable(), []);
   const [busy, setBusy] = useState(false);
+  const [decidingId, setDecidingId] = useState("");
   const [error, setError] = useState("");
   const [decision, setDecision] = useState("all");
   const [domain, setDomain] = useState("all");
@@ -663,8 +776,8 @@ function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
     setError("");
     try {
       await api.startPortfolio();
-      const analysisId = await waitForPortfolioAnalysis();
-      if (analysisId) onRunImpact(analysisId);
+      const ids = await waitForPortfolioAnalysis();
+      if (ids.length) onRunImpact(ids);
       else setError("Impact is still running. Open Compliance analysis in a minute.");
     } catch (err) {
       setError(err.message);
@@ -673,13 +786,38 @@ function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
     }
   }
 
+  async function decide(rowId, applicability) {
+    setDecidingId(rowId);
+    setError("");
+    try {
+      await api.decideApplicability(rowId, applicability);
+      setDecision("all");
+      setReview("all");
+      setState({ status: "ready", data: await api.getApplicable(), message: "" });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDecidingId("");
+    }
+  }
+
   return (
     <section className="page">
-      <h1 className="page-title">Applicable regulations</h1>
-      <p className="lede">
-        Applicability is decided from the company profile and RBI metadata first. Uncertain rows
-        need a person — they are not treated as in scope.
-      </p>
+      <PageHeader
+        kicker="Corpus"
+        title="Applicable regulations"
+        lede="Matched from the company profile and RBI metadata. Uncertain rows stay out of impact until a person decides."
+      >
+        <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
+          {busy ? "Running impact…" : "Run impact"}
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={goEvidence}>
+          Upload evidence
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={goUpload}>
+          Upload a circular
+        </button>
+      </PageHeader>
       {error && (
         <div className="banner error" role="alert">
           <p>{error}</p>
@@ -692,17 +830,6 @@ function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
         state={state}
         emptyText="No indexed RBI documents yet. The worker seeds the corpus in the background."
       />
-      <div className="actions">
-        <button className="btn btn-primary" type="button" onClick={runImpact} disabled={busy}>
-          {busy ? "Queuing…" : "Run impact on applicable set"}
-        </button>
-        <button className="btn btn-secondary" type="button" onClick={goEvidence}>
-          Upload company evidence
-        </button>
-        <button className="btn btn-secondary" type="button" onClick={goUpload}>
-          Upload another circular
-        </button>
-      </div>
       {rows.length > 0 && (
         <div className="filter-stack">
           <FilterBar
@@ -756,32 +883,37 @@ function ApplicableRegulations({ onRunImpact, goEvidence, goUpload }) {
         </div>
       )}
       {visible.map((row) => (
-        <article className="card result-card" key={row.id}>
-          <div className="clause-rail">{labelOf(row.applicability)}</div>
-          <div>
+        <article className="reg-row" key={row.id}>
+          <div className="reg-row-main">
             <h2>{row.title}</h2>
-            <dl className="dl">
-              <dt>Decision</dt>
-              <dd>
-                <Status value={row.applicability} />
-              </dd>
-              <dt>Reason</dt>
-              <dd>{row.reason}</dd>
-              <dt>Company characteristics</dt>
-              <dd>
-                {(row.matched_characteristics || []).map(labelOf).join(", ") || "None"}
-              </dd>
-              <dt>Domain</dt>
-              <dd>{labelOf(row.regulatory_domain)}</dd>
-            </dl>
-            {row.source_url && (
-              <div className="actions">
-                <OfficialSourceButton href={row.source_url} title={row.title} />
-              </div>
-            )}
+            <p className="muted">
+              {labelOf(row.regulatory_domain)}
+              {row.reference_number ? ` · ${row.reference_number}` : ""} · {row.reason}
+            </p>
             {row.human_review_required && (
-              <p className="muted">A person must review this applicability decision.</p>
+              <p className="muted">Decide applies or does not apply before this document is in an impact run.</p>
             )}
+            {row.reviewer_applicability && <p className="muted">Set by a person.</p>}
+          </div>
+          <Status value={row.applicability} />
+          <div className="reg-row-actions">
+            {row.source_url && <OfficialSourceButton href={row.source_url} title={row.title} />}
+            <button
+              className="btn btn-primary"
+              type="button"
+              disabled={decidingId === row.id || row.applicability === "applicable"}
+              onClick={() => decide(row.id, "applicable")}
+            >
+              {decidingId === row.id ? "Saving…" : "Applies"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              type="button"
+              disabled={decidingId === row.id || row.applicability === "not_applicable"}
+              onClick={() => decide(row.id, "not_applicable")}
+            >
+              Does not apply
+            </button>
           </div>
         </article>
       ))}
@@ -807,10 +939,11 @@ function RegulatoryUpdates({ goAnalysis }) {
     .filter((change) => kind === "all" || change.requirement_changes.length > 0);
   return (
     <section className="page">
-      <h1 className="page-title">Regulatory updates</h1>
-      <p className="lede">
-        A requirement is marked changed only when the clause text itself changed between versions.
-      </p>
+      <PageHeader
+        kicker="Corpus"
+        title="Regulatory updates"
+        lede="A requirement is marked changed only when the clause text itself changed between versions."
+      />
       <Banner state={state} emptyText="No version changes in the indexed corpus yet." />
       {changes.length > 0 && (
         <div className="filter-stack">
@@ -851,20 +984,43 @@ function CompanyProfile({ company, onSaved }) {
   const [form, setForm] = useState(() => ({
     company_name: company?.company_name || "PayFlow Technologies",
     organization_type: company?.organization_type || "payment_aggregator",
-    business_model: company?.business_model || "Online merchant payment processing",
+    business_model:
+      company?.business_model ||
+      "India-wide merchant acquiring: UPI QR and intent, hosted checkout, payouts, refunds, bill-pay collection, and device-led in-store payments.",
     operating_regions: (company?.operating_regions || ["India"]).join(", "),
-    products: (company?.products || ["Payments", "Refunds", "Settlements"]).join(", "),
-    customer_segments: (company?.customer_segments || ["Merchants", "Consumers"]).join(", "),
-    regulatory_entities: (company?.regulatory_entities || ["RBI"]).join(", "),
+    products: (
+      company?.products || [
+        "UPI QR and intent collect",
+        "Hosted checkout and payment links",
+        "In-store soundbox and QR plates",
+        "Merchant payouts and refunds",
+        "Bharat Bill Pay collection",
+        "Cross-border export collections (limited beta)",
+      ]
+    ).join(", "),
+    customer_segments: (
+      company?.customer_segments || ["Kirana and MSME merchants", "Enterprise marketplaces", "Consumers paying those merchants"]
+    ).join(", "),
+    regulatory_entities: (company?.regulatory_entities || ["RBI", "NPCI"]).join(", "),
     uses_customer_data: company?.uses_customer_data ?? true,
-    uses_automated_decisioning: company?.uses_automated_decisioning ?? false,
+    uses_automated_decisioning: company?.uses_automated_decisioning ?? true,
     has_outsourced_operations: company?.has_outsourced_operations ?? true,
-    existing_policies: (company?.existing_policies || ["KYC Policy", "Grievance Policy"]).join(
-      ", ",
-    ),
-    internal_controls: (company?.internal_controls || ["Access reviews", "Audit logging"]).join(
-      ", ",
-    ),
+    existing_policies: (
+      company?.existing_policies || [
+        "KYC Policy",
+        "Grievance Policy",
+        "Settlement Procedure",
+        "Data Localisation Policy",
+      ]
+    ).join(", "),
+    internal_controls: (
+      company?.internal_controls || [
+        "Maker-checker on merchant onboarding",
+        "Access reviews",
+        "Fraud-rule engine on UPI collect",
+        "Daily settlement recon",
+      ]
+    ).join(", "),
   }));
   const [state, setState] = useState({ status: "ready", message: "" });
 
@@ -923,12 +1079,11 @@ function CompanyProfile({ company, onSaved }) {
 
   return (
     <section className="page">
-      <h1 className="page-title">Company profile</h1>
-      <p className="lede">
-        Save the entity type and operating facts here. Indexed RBI documents are matched to this
-        profile. Company policy names listed below are not evidence — upload the PDFs on Company
-        evidence.
-      </p>
+      <PageHeader
+        kicker="Company"
+        title="Profile"
+        lede="Indexed RBI documents are matched to this entity type. Policy names listed below are not evidence — upload the PDFs on Evidence."
+      />
       {state.status === "error" && (
         <div className="banner error" role="alert">
           <p>{state.message}</p>
@@ -1227,10 +1382,47 @@ function EvidenceLibrary({ goSetup }) {
 
   return (
     <section className="page">
-      <h1 className="page-title">Evidence library</h1>
-      <p className="lede">
-        Gap checking cites only these PDFs. Names typed on the company profile are not proof.
-      </p>
+      <PageHeader
+        kicker="Company"
+        title="Evidence"
+        lede="Gap checking cites only these PDFs. Names typed on the company profile are not proof."
+      />
+      <Banner state={state} emptyText="No company documents yet. Upload a policy PDF." />
+      {state.status === "ready" && (
+        <div className="table-wrap">
+          <table>
+            <caption>
+              {state.data.length} uploaded {state.data.length === 1 ? "document" : "documents"}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Title</th>
+                <th scope="col">Type</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.data.map((doc) => (
+                <tr key={doc.id}>
+                  <td>{doc.title}</td>
+                  <td>{labelOf(doc.evidence_type)}</td>
+                  <td>
+                    <Status value={doc.processing_status} />
+                    {IN_FLIGHT.includes(doc.processing_status) && (
+                      <Progress
+                        steps={PROCESS_STEPS}
+                        current={doc.processing_status}
+                        label="Working"
+                        detail={PROCESS_COPY[doc.processing_status]}
+                      />
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <form className="card stack" onSubmit={upload}>
         <div>
           <label htmlFor="pol-file">PDF</label>
@@ -1276,40 +1468,6 @@ function EvidenceLibrary({ goSetup }) {
           </div>
         )}
       </form>
-      <Banner state={state} emptyText="No company documents yet. Upload a policy PDF." />
-      {state.status === "ready" && (
-        <div className="table-wrap">
-          <table>
-            <caption>Uploaded company documents</caption>
-            <thead>
-              <tr>
-                <th scope="col">Title</th>
-                <th scope="col">Type</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {state.data.map((doc) => (
-                <tr key={doc.id}>
-                  <td>{doc.title}</td>
-                  <td>{labelOf(doc.evidence_type)}</td>
-                  <td>
-                    <Status value={doc.processing_status} />
-                    {IN_FLIGHT.includes(doc.processing_status) && (
-                      <Progress
-                        steps={PROCESS_STEPS}
-                        current={doc.processing_status}
-                        label="Working"
-                        detail={PROCESS_COPY[doc.processing_status]}
-                      />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
       {state.status === "ready" && (
         <div className="actions">
           <button className="btn btn-secondary" type="button" onClick={goSetup}>
@@ -1440,14 +1598,15 @@ function DateLine({ entry }) {
   );
 }
 
-function AnalysisResults({ analysisId, goActions, goSetup }) {
+function AnalysisResults({ analysisIds, goActions, goSetup }) {
+  const ids = (analysisIds || []).filter(Boolean);
   const [analysis, setAnalysis] = useState(null);
   const [gaps, setGaps] = useState([]);
   const [actions, setActions] = useState([]);
   const [citation, setCitation] = useState(null);
   const [openCitationId, setOpenCitationId] = useState(null);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState(analysisId ? "loading" : "empty");
+  const [status, setStatus] = useState(ids.length ? "loading" : "empty");
   const [confirmReject, setConfirmReject] = useState(false);
   const [coverage, setCoverage] = useState("all");
   const [risk, setRisk] = useState("all");
@@ -1463,27 +1622,57 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   }, [confirmReject]);
 
   useEffect(() => {
-    if (!analysisId) {
+    if (!ids.length) {
       setStatus("empty");
-      return;
+      return undefined;
     }
     let cancelled = false;
     async function load() {
       try {
-        const [current, gapRows, actionRows] = await Promise.all([
-          api.getAnalysis(analysisId),
-          api.getGaps(analysisId),
-          api.getActions(analysisId),
-        ]);
+        const reports = await Promise.all(ids.map((id) => api.getAnalysis(id)));
+        const gapRows = (await Promise.all(ids.map((id) => api.getGaps(id)))).flat();
+        const actionRows = (await Promise.all(ids.map((id) => api.getActions(id)))).flat();
         if (cancelled) return;
-        setAnalysis(current);
+        const requirements = reports.flatMap((report) =>
+          (report.result?.requirements || []).map((item, index) => ({
+            ...item,
+            document_title: report.regulation_title,
+            analysis_id: report.id,
+            _key: `${report.id}-${item.id || item.clause_number || index}`,
+          })),
+        );
+        const failed = reports.find((report) => report.status === "failed");
+        const working = reports.some(
+          (report) => report.status !== "completed" && report.status !== "failed",
+        );
+        const primary = reports[0];
+        setAnalysis({
+          ...primary,
+          status: failed ? "failed" : working ? "processing" : "completed",
+          human_review_required: reports.some((report) => report.human_review_required),
+          result: {
+            ...(primary.result || {}),
+            requirements,
+            current_step: failed
+              ? failed.result?.failed_step
+              : working
+                ? primary.result?.current_step
+                : "completed",
+            failed_step: failed?.result?.failed_step,
+            verification_status: reports.some(
+              (report) => report.result?.verification_status === "verified",
+            )
+              ? "verified"
+              : primary.result?.verification_status,
+          },
+        });
         setGaps(gapRows);
         setActions(actionRows);
-        setStatus(current.status === "failed" ? "error" : "ready");
-        if (current.status === "failed") {
+        setStatus(failed ? "error" : "ready");
+        if (failed) {
           setError(
-            `Analysis incomplete (${labelOf(current.status)}${
-              current.result?.failed_step ? ` — broke at ${labelOf(current.result.failed_step)}` : ""
+            `Analysis incomplete (${labelOf(failed.status)}${
+              failed.result?.failed_step ? ` — broke at ${labelOf(failed.result.failed_step)}` : ""
             })`,
           );
         }
@@ -1500,13 +1689,17 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [analysisId]);
+  }, [ids.join(",")]);
 
   async function decide(kind) {
     try {
-      const updated =
-        kind === "approve" ? await api.approve(analysisId) : await api.reject(analysisId);
-      setAnalysis(updated);
+      const updated = await Promise.all(
+        ids.map((id) => (kind === "approve" ? api.approve(id) : api.reject(id))),
+      );
+      setAnalysis((current) => ({
+        ...current,
+        review_status: updated[0]?.review_status,
+      }));
       setConfirmReject(false);
       setError("");
     } catch (err) {
@@ -1585,11 +1778,18 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
 
   return (
     <section className="page">
-      <h1 className="page-title">Compliance analysis</h1>
-      <p className="lede">
-        This is a working analysis, not legal advice. Cited dates come from the circular.
-        Suggested dates are never shown as regulator deadlines.
-      </p>
+      <PageHeader
+        kicker="Work"
+        title="Analysis"
+        lede="Working assessment, not legal advice. Cited dates come from the circular. Suggested dates are never shown as regulator deadlines."
+      >
+        <button className="btn btn-primary" type="button" onClick={() => decide("approve")}>
+          Approve report
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={goActions}>
+          Open actions
+        </button>
+      </PageHeader>
       {error && (
         <div className="banner error" role="alert">
           <p>{error}</p>
@@ -1604,11 +1804,10 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
         </div>
       )}
       <div className="card">
-        <p className="kicker">Report</p>
+        <p className="kicker">Impact run</p>
         <div className="meta-row">
           <Status value={analysis.status} />
           <Status value={analysis.review_status || "pending"} />
-          <Status value={analysis.applicability || "uncertain"} />
           <Status value={analysis.overall_risk || "none"} />
           <Status value={result.verification_status || "unverified"} />
         </div>
@@ -1616,20 +1815,16 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
           <p className="muted">A person must review this report before it counts as approved.</p>
         )}
         <p>
-          {actions.length} {actions.length === 1 ? "task" : "tasks"} on the action tracker.
+          {ids.length} {ids.length === 1 ? "circular" : "circulars"} · {requirements.length}{" "}
+          {requirements.length === 1 ? "requirement" : "requirements"} · {actions.length}{" "}
+          {actions.length === 1 ? "task" : "tasks"} on the action tracker.
         </p>
         {working && (
           <Progress steps={ANALYSIS_STEPS} current={currentStep} label="Current step" />
         )}
         <div className="actions">
-          <button className="btn btn-primary" type="button" onClick={() => decide("approve")}>
-            Approve report
-          </button>
           <button className="btn btn-danger" type="button" onClick={() => setConfirmReject(true)}>
             Reject report
-          </button>
-          <button className="btn btn-secondary" type="button" onClick={goActions}>
-            Open action tracker
           </button>
         </div>
         {confirmReject && (
@@ -1695,9 +1890,10 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
       {visibleRequirements.map((item, index) => {
         const citationId = item.citation_id;
         return (
-          <article className="card result-card" key={item.id || item.requirement || index}>
+          <article className="card result-card" key={item._key || item.id || item.requirement || index}>
             <div className="clause-rail">{item.clause_number || String(index + 1).padStart(2, "0")}</div>
             <div>
+              {item.document_title && <p className="kicker">{item.document_title}</p>}
               <h2>{item.requirement || item.requirement_text}</h2>
               <dl className="dl">
                 <dt>Applicability</dt>
@@ -1789,11 +1985,18 @@ function AnalysisResults({ analysisId, goActions, goSetup }) {
   );
 }
 
-function ActionTracker({ analysisId, goSetup }) {
-  const [state, setState] = useAsync(
-    () => (analysisId ? api.getActions(analysisId) : Promise.resolve([])),
-    [analysisId],
-  );
+function ActionTracker({ analysisIds, goSetup }) {
+  const ids = (analysisIds || []).filter(Boolean);
+  const [state, setState] = useAsync(async () => {
+    if (!ids.length) return [];
+    const reports = await Promise.all(ids.map((id) => api.getAnalysis(id)));
+    const titles = Object.fromEntries(reports.map((report) => [String(report.id), report.regulation_title]));
+    const actions = (await Promise.all(ids.map((id) => api.getActions(id)))).flat();
+    return actions.map((item) => ({
+      ...item,
+      document_title: titles[String(item.analysis_id)] || "",
+    }));
+  }, [ids.join(",")]);
   const [error, setError] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const rows = state.data || [];
@@ -1802,13 +2005,23 @@ function ActionTracker({ analysisId, goSetup }) {
   async function changeStatus(id, status) {
     try {
       await api.updateAction(id, { status });
-      setState({ status: "ready", data: await api.getActions(analysisId), message: "" });
+      const reports = await Promise.all(ids.map((item) => api.getAnalysis(item)));
+      const titles = Object.fromEntries(reports.map((report) => [String(report.id), report.regulation_title]));
+      const actions = (await Promise.all(ids.map((item) => api.getActions(item)))).flat();
+      setState({
+        status: "ready",
+        data: actions.map((item) => ({
+          ...item,
+          document_title: titles[String(item.analysis_id)] || "",
+        })),
+        message: "",
+      });
     } catch (err) {
       setError(err.message);
     }
   }
 
-  if (!analysisId) {
+  if (!ids.length) {
     return (
       <section className="page">
         <h1 className="page-title">Action tracker</h1>
@@ -1824,8 +2037,11 @@ function ActionTracker({ analysisId, goSetup }) {
 
   return (
     <section className="page">
-      <h1 className="page-title">Action tracker</h1>
-      <p className="lede">Tasks that come out of the report. Change status as work moves.</p>
+      <PageHeader
+        kicker="Work"
+        title="Actions"
+        lede="Tasks from the impact run. Change status as work moves."
+      />
       {error && (
         <div className="banner error" role="alert">
           <p>{error}</p>
@@ -1856,10 +2072,11 @@ function ActionTracker({ analysisId, goSetup }) {
       {state.status === "ready" && visible.length > 0 && (
         <div className="table-wrap">
           <table>
-            <caption>Tasks for this analysis</caption>
+            <caption>Tasks for this impact run</caption>
             <thead>
               <tr>
                 <th scope="col">Task</th>
+                <th scope="col">Circular</th>
                 <th scope="col">Owner</th>
                 <th scope="col">Status</th>
               </tr>
@@ -1868,6 +2085,7 @@ function ActionTracker({ analysisId, goSetup }) {
               {visible.map((item) => (
                 <tr key={item.id}>
                   <td>{item.title}</td>
+                  <td>{item.document_title || "—"}</td>
                   <td>{item.owner_department || "Unassigned"}</td>
                   <td>
                     <label className="sr-only" htmlFor={`action-status-${item.id}`}>

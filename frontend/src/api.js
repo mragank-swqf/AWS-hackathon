@@ -72,4 +72,9 @@ export const api = {
   getCorpus: () => request("/api/v1/intelligence/corpus"),
   syncCorpus: () => request("/api/v1/intelligence/sync", { method: "POST", body: "{}" }),
   startPortfolio: () => request("/api/v1/intelligence/portfolio", { method: "POST", body: "{}" }),
+  decideApplicability: (id, applicability) =>
+    request(`/api/v1/intelligence/applicable/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ applicability }),
+    }),
 };

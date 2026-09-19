@@ -157,6 +157,7 @@ class AnalysisRead(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     review_status: str | None = None
+    regulation_title: str | None = None
 
 
 class AnalysisStatusRead(BaseModel):
@@ -240,6 +241,11 @@ class ApplicabilityRead(BaseModel):
     rule_id: str | None
     human_review_required: bool
     processing_status: str
+    reviewer_applicability: str | None = None
+
+
+class ApplicabilityDecisionWrite(ForbiddenExtraModel):
+    applicability: str
 
 
 class RequirementChangeRead(BaseModel):
@@ -290,4 +296,5 @@ class DashboardRead(BaseModel):
     assessment_confidence: dict[str, Any]
     portfolio_run_id: UUID | None
     analysis_id: UUID | None
+    analysis_ids: list[UUID] = Field(default_factory=list)
     ingest_status: str | None
