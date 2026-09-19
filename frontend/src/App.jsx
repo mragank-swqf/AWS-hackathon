@@ -52,6 +52,13 @@ const DEPARTMENTS = [
 ];
 
 const PROCESS_STEPS = ["queued", "extracting", "chunking", "embedding", "completed"];
+const IN_FLIGHT = ["queued", "extracting", "chunking", "embedding"];
+const PROCESS_COPY = {
+  queued: "Waiting for the worker to start this PDF.",
+  extracting: "Reading text from the PDF.",
+  chunking: "Splitting the circular into clauses.",
+  embedding: "Indexing clauses in Amazon Bedrock.",
+};
 const ANALYSIS_STEPS = [
   "queued",
   "applicability",
@@ -119,16 +126,19 @@ function statusTone(value) {
   ) {
     return "bad";
   }
+  if (IN_FLIGHT.includes(value) || (ANALYSIS_STEPS.includes(value) && value !== "completed")) {
+    return "busy";
+  }
   if (
     [
       "partial",
       "insufficient_evidence",
       "pending",
-      "queued",
       "uncertain",
       "high",
       "unverified",
       "partially_verified",
+      "processing",
     ].includes(value)
   ) {
     return "warn";
@@ -137,7 +147,13 @@ function statusTone(value) {
 }
 
 function Status({ value }) {
-  return <span className={`status status-${statusTone(value)}`}>{labelOf(value)}</span>;
+  const busy = IN_FLIGHT.includes(value) || (ANALYSIS_STEPS.includes(value) && value !== "completed");
+  return (
+    <span className={`status status-${statusTone(value)}${busy ? " status-busy" : ""}`}>
+      {busy && <span className="spinner" aria-hidden="true" />}
+      {labelOf(value)}
+    </span>
+  );
 }
 
 function Banner({ state, emptyText, emptyAction }) {
@@ -166,18 +182,20 @@ function Banner({ state, emptyText, emptyAction }) {
   return null;
 }
 
-function Progress({ steps, current, label }) {
+function Progress({ steps, current, label, detail }) {
   const index = Math.max(0, steps.indexOf(current));
   const known = index >= 0;
   const percent = known ? Math.round(((index + 1) / steps.length) * 100) : 8;
   return (
-    <div className="progress" role="status">
+    <div className="progress" role="status" aria-live="polite">
       <div className="progress-track" aria-hidden="true">
-        <div className="progress-fill" style={{ width: `${percent}%` }} />
+        <div className="progress-fill is-busy" style={{ width: `${percent}%` }} />
       </div>
       <p className="progress-label">
+        <span className="spinner" aria-hidden="true" />
         {label}: {labelOf(current)} ({percent}%)
       </p>
+      {detail && <p className="progress-detail">{detail}</p>}
     </div>
   );
 }
@@ -205,13 +223,42 @@ function useAsync(loader, deps) {
   return [state, setState];
 }
 
+function usePollWhile(loader, setState, rows) {
+  const pending = Array.isArray(rows)
+    ? rows.some((row) => IN_FLIGHT.includes(row.processing_status))
+    : false;
+  useEffect(() => {
+    if (!pending) return undefined;
+    const timer = setInterval(() => {
+      loader()
+        .then((data) => {
+          setState({
+            status: data.length ? "ready" : "empty",
+            data,
+            message: "",
+          });
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [pending, loader, setState]);
+}
+
 export default function App() {
-  const [screen, setScreen] = useState("profile");
+  const [screen, setScreen] = useState(() => {
+    const saved = window.localStorage.getItem("regimpact_screen");
+    if (SCREENS.some(([id]) => id === saved)) return saved;
+    return window.localStorage.getItem("regimpact_company_id") ? "regulations" : "profile";
+  });
   const [navOpen, setNavOpen] = useState(true);
   const [company, setCompany] = useState(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState(
     window.localStorage.getItem("regimpact_analysis_id") || "",
   );
+
+  useEffect(() => {
+    window.localStorage.setItem("regimpact_screen", screen);
+  }, [screen]);
 
   useEffect(() => {
     const id = window.localStorage.getItem("regimpact_company_id");
@@ -517,6 +564,7 @@ function RegulationLibrary({ goEvidence }) {
   const [state, setState] = useAsync(() => api.listRegulations(), []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  usePollWhile(api.listRegulations, setState, state.data);
 
   async function upload(event) {
     event.preventDefault();
@@ -609,14 +657,14 @@ function RegulationLibrary({ goEvidence }) {
                   <td>{labelOf(doc.document_type)}</td>
                   <td>
                     <Status value={doc.processing_status} />
-                    {PROCESS_STEPS.includes(doc.processing_status) &&
-                      doc.processing_status !== "completed" && (
-                        <Progress
-                          steps={PROCESS_STEPS}
-                          current={doc.processing_status}
-                          label="Processing"
-                        />
-                      )}
+                    {IN_FLIGHT.includes(doc.processing_status) && (
+                      <Progress
+                        steps={PROCESS_STEPS}
+                        current={doc.processing_status}
+                        label="Working"
+                        detail={PROCESS_COPY[doc.processing_status]}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}
@@ -639,6 +687,7 @@ function EvidenceLibrary({ goSetup }) {
   const [state, setState] = useAsync(() => api.listPolicies(), []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  usePollWhile(api.listPolicies, setState, state.data);
 
   async function upload(event) {
     event.preventDefault();
@@ -724,14 +773,14 @@ function EvidenceLibrary({ goSetup }) {
                   <td>{labelOf(doc.evidence_type)}</td>
                   <td>
                     <Status value={doc.processing_status} />
-                    {PROCESS_STEPS.includes(doc.processing_status) &&
-                      doc.processing_status !== "completed" && (
-                        <Progress
-                          steps={PROCESS_STEPS}
-                          current={doc.processing_status}
-                          label="Processing"
-                        />
-                      )}
+                    {IN_FLIGHT.includes(doc.processing_status) && (
+                      <Progress
+                        steps={PROCESS_STEPS}
+                        current={doc.processing_status}
+                        label="Working"
+                        detail={PROCESS_COPY[doc.processing_status]}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

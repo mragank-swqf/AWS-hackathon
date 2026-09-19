@@ -48,6 +48,8 @@ def process_once(wait_seconds: int = 20) -> int:
             handled += 1
         except Exception:
             logger.exception("Job failed: %s", job_type)
+            # Stop SQS from immediately replaying a throttled Bedrock job.
+            extend_visibility(message.receipt_handle, 300)
     return handled
 
 

@@ -83,6 +83,8 @@ def start_analysis(
     db.add(review)
     db.flush()
     analysis.review = review
+    db.commit()
+    db.refresh(analysis)
     enqueue_run_analysis(analysis.id, payload.company_id)
     return _to_analysis_read(analysis)
 

@@ -42,7 +42,7 @@ from app.enums import (
     AnalysisStatus,
     ExtractionMethod,
 )
-from app.services.embeddings import Embedder, TitanEmbedder
+from app.services.embeddings import Embedder, default_embedder
 from app.services.retrieval import SearchFilters, SearchHit, hybrid_search
 
 logger = logging.getLogger("regimpact.runner")
@@ -134,7 +134,7 @@ def run_analysis(
     today: date | None = None,
 ) -> None:
     llm = llm or ClaudeLLM()
-    embedder = embedder or TitanEmbedder()
+    embedder = embedder or default_embedder()
     today = today or date.today()
     analysis = session.get(ImpactAnalysis, analysis_id)
     if analysis is None:

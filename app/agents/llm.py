@@ -9,7 +9,10 @@ from typing import Protocol, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
+from app.config import get_settings
 from app.services.bedrock import invoke_claude
+from app.services.local_ai import complete_local, local_freeform
+from app.services.openai_client import invoke_openai_chat
 
 T = TypeVar("T", bound=BaseModel)
 STEP_TIMEOUT_SECONDS = 120
@@ -24,6 +27,11 @@ class LLM(Protocol):
 
 class ClaudeLLM:
     def complete(self, prompt: str) -> str:
+        provider = get_settings().llm_provider
+        if provider == "openai":
+            return invoke_openai_chat(prompt, max_tokens=4096)
+        if provider == "local":
+            return local_freeform(prompt)
         return invoke_claude(prompt, max_tokens=4096)
 
 
@@ -47,6 +55,8 @@ def parse_model(model: type[T], text: str) -> T:
 
 
 def complete_model(llm: LLM, prompt: str, model: type[T], *, started_at: float) -> tuple[T, int]:
+    if get_settings().llm_provider == "local":
+        return complete_local(prompt, model)
     current = prompt
     last_error: Exception | None = None
     for attempt in range(1, MAX_ATTEMPTS + 1):

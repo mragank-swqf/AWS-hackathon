@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CompanyPolicy, DocumentChunk, RegulatoryDocument
 from app.enums import ExtractionMethod, ProcessingStatus
 from app.services.chunking import chunk_pages
-from app.services.embeddings import Embedder, TitanEmbedder
+from app.services.embeddings import Embedder, default_embedder
 from app.services.pdf import extract_pages
 from app.services.storage import get_object_bytes
 
@@ -20,7 +20,7 @@ logger = logging.getLogger("regimpact.ingest")
 
 def _set_status(session: Session, document: RegulatoryDocument | CompanyPolicy, status: ProcessingStatus) -> None:
     document.processing_status = status.value
-    session.flush()
+    session.commit()
 
 
 def _replace_chunks(session: Session, *, regulation_id: UUID | None, policy_id: UUID | None) -> None:
@@ -70,7 +70,7 @@ def _save_chunks(
 
 
 def ingest_bytes(data: bytes, embedder: Embedder | None = None) -> tuple[list, int, list[int]]:
-    embedder = embedder or TitanEmbedder()
+    embedder = embedder or default_embedder()
     pages = extract_pages(data)
     drafts = chunk_pages(pages)
     unreadable = [page.page_number for page in pages if page.unreadable]
@@ -84,11 +84,12 @@ def ingest_regulation(
 ) -> None:
     document = session.get(RegulatoryDocument, document_id)
     if document is None:
-        raise ValueError(f"Regulation {document_id} not found")
+        logger.warning("Regulation %s is gone; dropping ingest job", document_id)
+        return
     if document.processing_status == ProcessingStatus.COMPLETED.value:
         logger.info("Regulation %s already ingested; skipping", document_id)
         return
-    embedder = embedder or TitanEmbedder()
+    embedder = embedder or default_embedder()
     try:
         _set_status(session, document, ProcessingStatus.EXTRACTING)
         data = get_object_bytes(document.s3_key)
@@ -118,11 +119,12 @@ def ingest_policy(
 ) -> None:
     policy = session.get(CompanyPolicy, document_id)
     if policy is None:
-        raise ValueError(f"Policy {document_id} not found")
+        logger.warning("Policy %s is gone; dropping ingest job", document_id)
+        return
     if policy.processing_status == ProcessingStatus.COMPLETED.value:
         logger.info("Policy %s already ingested; skipping", document_id)
         return
-    embedder = embedder or TitanEmbedder()
+    embedder = embedder or default_embedder()
     try:
         _set_status(session, policy, ProcessingStatus.EXTRACTING)
         data = get_object_bytes(policy.s3_key)

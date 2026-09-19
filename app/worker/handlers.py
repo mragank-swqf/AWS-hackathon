@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 from uuid import UUID
 
 from app.agents.runner import run_analysis
+from app.db.models import ImpactAnalysis
 from app.db.session import get_session_factory
 from app.services.ingest import ingest_policy, ingest_regulation
 
@@ -50,6 +52,8 @@ def handle_run_analysis(body: dict[str, Any]) -> None:
     analysis_id = UUID(body["analysis_id"])
 
     def work(session) -> None:
+        if session.get(ImpactAnalysis, analysis_id) is None:
+            time.sleep(2)
         run_analysis(session, analysis_id)
 
     _with_session(work)

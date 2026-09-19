@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import DocumentChunk, RegulatoryDocument
 from app.enums import ANALYSIS_DEPTH_CHUNK_LIMIT, AnalysisDepth
-from app.services.embeddings import Embedder, TitanEmbedder
+from app.services.embeddings import Embedder, default_embedder
 
 logger = logging.getLogger("regimpact.retrieval")
 
@@ -161,7 +161,7 @@ def hybrid_search(
     """pgvector + Postgres FTS, fused with RRF. Filters stay inside SQL (spec 11)."""
     limit = limit or ANALYSIS_DEPTH_CHUNK_LIMIT[depth]
     fetch = max(limit * 2, limit)
-    embedder = embedder or TitanEmbedder()
+    embedder = embedder or default_embedder()
 
     keyword_ids: list[UUID] = []
     clause = clause_number_from_query(query)
