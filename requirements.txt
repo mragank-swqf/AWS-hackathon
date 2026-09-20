@@ -1,48 +1,67 @@
-# RegImpact - Python backend dependencies
+# RegImpact Python backend — pinned for the hackathon build.
+# Requires Python 3.11+.
+# Install: pip install -r requirements.txt
+#
+# Covers the API, worker, ingestion, RAG, Bedrock calls, and tests.
+# Frontend is React (not listed here). OCR / Textract is left out on purpose.
 
-# API server
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
-python-multipart
+# --- API server (spec-tool-api-contracts, spec-architecture-system) ---
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+gunicorn==26.2.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-multipart==0.0.32
+orjson==3.12.0
 
-# Database
-sqlalchemy
-psycopg2-binary
-alembic
+# --- Config and environment (spec-security-access-control) ---
+python-dotenv==1.2.3
 
-# AWS
-boto3
+# --- Database and search (spec-data-database, spec-process-rag-pipeline) ---
+sqlalchemy==2.0.54
+psycopg2-binary==2.9.13
+alembic==1.20.0
+pgvector==0.5.0
 
-# RAG and document processing
-langchain
-langchain-community
-langchain-text-splitters
-langgraph
-pypdf
-python-docx
-beautifulsoup4
+# --- AWS: S3, SQS, Bedrock, Secrets Manager, CloudWatch ---
+# (spec-infrastructure-aws-deployment)
+boto3==1.43.96
 
-# Embeddings and vector search
-sentence-transformers
-chromadb
-numpy
+# --- Document ingestion (spec-process-document-ingestion) ---
+pypdf==6.19.0
+langchain-text-splitters==1.1.2
+tiktoken==0.14.0
+filetype==1.2.0
 
-# HTTP and utilities
-httpx
-requests
-python-dotenv
-orjson
+# --- Embeddings / retrieval helpers (spec-process-rag-pipeline) ---
+numpy==2.5.3
 
-# Security and authentication
-PyJWT
-passlib[bcrypt]
+# --- HTTP, retries, dates (spec-process-agent-orchestration REQ-008) ---
+httpx==0.28.1
+requests==2.34.2
+tenacity==9.1.4
+python-dateutil==2.9.0.post0
 
-# Testing
-pytest
-pytest-asyncio
+# --- Auth libraries for later login (spec-security-access-control LTR-001) ---
+# Not used in the hackathon build. Kept so adding login is not a new dependency hunt.
+# bcrypt is pinned below 5 because passlib 1.7.4 does not work with bcrypt 5.
+PyJWT==2.14.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 
-# Observability and validation
-structlog
-jsonschema
+# --- Logging and extra schema checks ---
+structlog==26.1.0
+jsonschema==4.26.0
+
+# --- Tests (spec-process-testing-evaluation) ---
+pytest==9.1.1
+pytest-asyncio==1.4.0
+pytest-cov==7.1.0
+pytest-mock==3.15.1
+moto[s3,sqs,secretsmanager]==5.2.3
+factory-boy==3.3.3
+freezegun==1.5.5
+respx==0.23.1
+
+# --- Lint (GitHub Actions from spec-schema-product-definition) ---
+ruff==0.16.8

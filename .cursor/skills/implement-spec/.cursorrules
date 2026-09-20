@@ -1,0 +1,15 @@
+When the user wants the product built from the written specs, follow the implement-spec skill:
+
+1. Read SKILL.md in this folder in full. It is an implement-only workflow.
+2. Do not interview. Do not write a new product spec. Do not wait for approval.
+3. Product specs in spec/01 through spec/17 are already approved. Implement them.
+4. One MVP stage per request. Default to the first incomplete stage (usually Stage 1).
+5. Read spec/01–04 for context, then only the stage files you are building.
+6. Start writing code in the same turn. Keep progress in spec/impl/, not by editing spec/01–17.
+7. Stack: FastAPI, Postgres + pgvector, S3, SQS, Bedrock via boto3, React talking only to the API.
+8. Hackathon cuts: no login, no OCR, no dashboard. Keep company_id on tenant data.
+9. Verify with pytest and ruff check . Do not commit unless the user asks.
+
+Trigger this process when the user asks to: implement the specs, implement spec, start coding,
+build the MVP, build stage 1–6, continue or resume implementation, code from the specs, or make
+the app from the specs.

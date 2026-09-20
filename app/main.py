@@ -1,53 +1,72 @@
-import json
-import os
-import uuid
-from datetime import datetime, timezone
+from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
+from uuid import uuid4
 
-from app.aws import client
+import structlog
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="RegImpact API")
-
-
-class JobRequest(BaseModel):
-    company_id: str = "company_001"
-    regulation_id: str | None = None
-    note: str = "localstack demo job"
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+from app.api.analyses import router as analyses_router
+from app.api.companies import router as companies_router
+from app.api.errors import register_error_handlers
+from app.api.health import router as health_router
+from app.api.intelligence import router as intelligence_router
+from app.api.policies import router as policies_router
+from app.api.regulations import router as regulations_router
+from app.config import get_settings
 
 
-@app.post("/api/v1/jobs")
-def enqueue_job(body: JobRequest):
-    job_id = str(uuid.uuid4())
-    payload = {
-        "job_id": job_id,
-        "company_id": body.company_id,
-        "regulation_id": body.regulation_id,
-        "note": body.note,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    key = f"jobs/{job_id}.json"
+def configure_logging() -> None:
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.JSONRenderer(),
+        ]
+    )
 
-    try:
-        s3 = client("s3")
-        sqs = client("sqs")
-        s3.put_object(
-            Bucket=os.environ["S3_BUCKET"],
-            Key=key,
-            Body=json.dumps(payload).encode("utf-8"),
-            ContentType="application/json",
-        )
-        sqs.send_message(
-            QueueUrl=os.environ["SQS_QUEUE_URL"],
-            MessageBody=json.dumps({"job_id": job_id, "s3_key": key}),
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"LocalStack enqueue failed: {exc}") from exc
 
-    return {"job_id": job_id, "s3_key": key, "status": "queued"}
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    configure_logging()
+    yield
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    app = FastAPI(
+        title="RegImpact API",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origin_list or ["http://localhost:5173"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    register_error_handlers(app)
+    app.include_router(health_router)
+    app.include_router(companies_router)
+    app.include_router(regulations_router)
+    app.include_router(policies_router)
+    app.include_router(analyses_router)
+    app.include_router(intelligence_router)
+
+    @app.middleware("http")
+    async def request_id_middleware(request: Request, call_next):
+        request_id = request.headers.get("X-Request-Id") or f"req_{uuid4().hex[:12]}"
+        request.state.request_id = request_id
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = request_id
+        structlog.contextvars.clear_contextvars()
+        return response
+
+    return app
+
+
+app = create_app()
